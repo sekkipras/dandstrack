@@ -684,6 +684,36 @@ body::before {
   border-radius: var(--radius-full);
 }
 
+/* Form Row - Date and Note side by side on desktop, stacked on mobile */
+.form-row {
+  display: flex;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.form-row .form-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-row .flex-grow {
+  flex: 2;
+}
+
+/* Stack on mobile */
+@media (max-width: 480px) {
+  .form-row {
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .form-row .form-group,
+  .form-row .flex-grow {
+    flex: none;
+    width: 100%;
+  }
+}
+
 /* ========================================
    Transactions
 ======================================== */

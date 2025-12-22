@@ -102,6 +102,7 @@ try {
 // Migration: Add new categories if they don't exist (for existing databases)
 const newCategories = [
   { name: 'Vegetables & Fruits', type: 'expense', icon: '🥬', color: '#16a34a' },
+  { name: 'Drinking Water', type: 'expense', icon: '💧', color: '#0ea5e9' },
   { name: 'ATM Withdrawal', type: 'income', icon: '🏧', color: '#0ea5e9' },
 ];
 
@@ -122,6 +123,7 @@ if (categoryCount.count === 0) {
     { name: 'Food & Dining', type: 'expense', icon: '🍔', color: '#ef4444' },
     { name: 'Groceries', type: 'expense', icon: '🛒', color: '#f97316' },
     { name: 'Vegetables & Fruits', type: 'expense', icon: '🥬', color: '#16a34a' },
+    { name: 'Drinking Water', type: 'expense', icon: '💧', color: '#0ea5e9' },
     { name: 'Transport', type: 'expense', icon: '🚗', color: '#eab308' },
     { name: 'Utilities', type: 'expense', icon: '💡', color: '#22c55e' },
     { name: 'Entertainment', type: 'expense', icon: '🎬', color: '#3b82f6' },

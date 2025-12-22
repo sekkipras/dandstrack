@@ -103,6 +103,7 @@ try {
 const newCategories = [
   { name: 'Vegetables & Fruits', type: 'expense', icon: '🥬', color: '#16a34a' },
   { name: 'Drinking Water', type: 'expense', icon: '💧', color: '#0ea5e9' },
+  { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1' },
   { name: 'ATM Withdrawal', type: 'income', icon: '🏧', color: '#0ea5e9' },
 ];
 
@@ -131,6 +132,7 @@ if (categoryCount.count === 0) {
     { name: 'Health', type: 'expense', icon: '🏥', color: '#ec4899' },
     { name: 'Education', type: 'expense', icon: '📚', color: '#14b8a6' },
     { name: 'Bills', type: 'expense', icon: '📄', color: '#64748b' },
+    { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1' },
     { name: 'Other Expense', type: 'expense', icon: '📦', color: '#78716c' },
     // Income categories
     { name: 'Salary', type: 'income', icon: '💼', color: '#22c55e' },

@@ -1537,3 +1537,16 @@ body::before {
     padding-bottom: max(var(--space-lg), env(safe-area-inset-bottom));
   }
 }
+
+/* Version Footer */
+.version-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  margin-bottom: calc(var(--nav-height) + var(--space-lg));
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  opacity: 0.6;
+}

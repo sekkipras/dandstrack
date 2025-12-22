@@ -2,7 +2,7 @@
 // Provides offline caching for PWA functionality
 
 // UPDATE THIS VERSION NUMBER WHEN DEPLOYING CHANGES!
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const CACHE_NAME = `dands-expense-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [

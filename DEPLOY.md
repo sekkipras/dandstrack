@@ -57,7 +57,34 @@ docker compose up -d --build
 - **Local**: http://192.168.0.202:3000
 - **Tailscale**: http://pihole:3000 (from any Tailscale device)
 
-## 📊 Version
+## � Troubleshooting
+
+### Git pull says "no tracking information"
+Fix the branch tracking:
+```bash
+cd ~/dands-expense
+git fetch origin
+git checkout -B main origin/main
+```
+
+Then future pulls will work normally:
+```bash
+git pull
+```
+
+### Permission denied errors
+Use sudo for file operations:
+```bash
+sudo rm -rf <file>
+```
+
+### Container won't start
+Check logs:
+```bash
+docker logs dands-expense
+```
+
+## �📊 Version
 
 Current version: **v1.2.0**  
 Last updated: **Dec 22, 2024**

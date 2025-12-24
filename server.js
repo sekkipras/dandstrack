@@ -105,6 +105,7 @@ const newCategories = [
   { name: 'Drinking Water', type: 'expense', icon: '💧', color: '#0ea5e9' },
   { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1' },
   { name: 'ATM Withdrawal', type: 'income', icon: '🏧', color: '#0ea5e9' },
+  { name: 'Travel Advance', type: 'income', icon: '✈️', color: '#14b8a6' },
 ];
 
 for (const cat of newCategories) {
@@ -140,6 +141,7 @@ if (categoryCount.count === 0) {
     { name: 'Investment', type: 'income', icon: '📈', color: '#059669' },
     { name: 'Gift', type: 'income', icon: '🎁', color: '#34d399' },
     { name: 'ATM Withdrawal', type: 'income', icon: '🏧', color: '#0ea5e9' },
+    { name: 'Travel Advance', type: 'income', icon: '✈️', color: '#14b8a6' },
     { name: 'Other Income', type: 'income', icon: '💵', color: '#6ee7b7' },
   ];
 

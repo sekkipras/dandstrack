@@ -746,6 +746,17 @@ function setupMainHandlers() {
             document.getElementById('add-transaction-btn').querySelector('span').textContent =
                 `Add ${state.transactionType === 'expense' ? 'Expense' : 'Income'}`;
 
+            // Update merchant/source label and placeholder based on transaction type
+            const merchantLabel = document.getElementById('merchant-label');
+            const merchantInput = document.getElementById('transaction-merchant');
+            if (state.transactionType === 'income') {
+                merchantLabel.textContent = 'Source (optional)';
+                merchantInput.placeholder = 'e.g., Office, Bank Transfer...';
+            } else {
+                merchantLabel.textContent = 'Where? (optional)';
+                merchantInput.placeholder = 'e.g., Big Bazaar, Amazon...';
+            }
+
             loadCategories();
         });
     });

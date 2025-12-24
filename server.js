@@ -391,7 +391,7 @@ app.post('/api/transactions', authenticate, (req, res) => {
   }
 
   // Validate payment mode
-  const validModes = ['cash', 'upi', 'credit_card', 'debit_card'];
+  const validModes = ['cash', 'upi', 'bank_transfer', 'credit_card', 'debit_card'];
   const mode = validModes.includes(paymentMode) ? paymentMode : 'cash';
 
   // Sanitize text inputs

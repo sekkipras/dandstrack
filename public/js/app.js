@@ -367,6 +367,7 @@ function renderTransactionItem(tx) {
     const paymentIcons = {
         cash: '💵',
         upi: '📱',
+        bank_transfer: '🏛️',
         credit_card: '💳',
         debit_card: '🏦'
     };

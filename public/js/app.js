@@ -10,10 +10,12 @@ const state = {
     user: null,
     categories: [],
     transactions: [],
+    allRecentTransactions: [],  // Store all for filtering
     documents: [],
     selectedCategory: null,
     currentView: 'home',
     categoryGroup: 'home',  // 'home' or 'office'
+    transactionFilter: 'all',  // 'all', 'home', or 'office'
     docCategory: 'all',
     statsPeriod: 'month'
 };
@@ -442,10 +444,9 @@ function renderTransactions(transactions, containerId) {
 async function refreshDashboard() {
     const dateRange = utils.getDateRange('month');
 
-    const [summary, transactions, monthlySummary] = await Promise.all([
+    const [summary, transactions] = await Promise.all([
         loadSummary(dateRange),
-        loadTransactions({ ...dateRange, limit: 10 }),
-        loadMonthlySummary()
+        loadTransactions({ ...dateRange, limit: 20 })
     ]);
 
     // Update summary cards
@@ -462,11 +463,24 @@ async function refreshDashboard() {
     document.getElementById('total-home').textContent = utils.formatCurrency(homeTotal);
     document.getElementById('total-office').textContent = utils.formatCurrency(officeTotal);
 
-    // Render transactions
-    renderTransactions(transactions, 'transactions-list');
+    // Store all transactions for filtering
+    state.allRecentTransactions = transactions;
 
-    // Render monthly summary
-    renderMonthlySummary(monthlySummary);
+    // Render transactions based on current filter
+    filterAndRenderTransactions();
+}
+
+// Filter and render transactions based on selected filter
+function filterAndRenderTransactions() {
+    let filtered = state.allRecentTransactions;
+
+    if (state.transactionFilter === 'home') {
+        filtered = state.allRecentTransactions.filter(t => t.category_group === 'home');
+    } else if (state.transactionFilter === 'office') {
+        filtered = state.allRecentTransactions.filter(t => t.category_group === 'office');
+    }
+
+    renderTransactions(filtered.slice(0, 10), 'transactions-list');
 }
 
 // Monthly summary functions
@@ -822,11 +836,24 @@ function setupMainHandlers() {
         });
     });
 
-    // Month selector for monthly summary
-    document.getElementById('month-selector').addEventListener('change', async (e) => {
-        const [year, month] = e.target.value.split('-');
-        const summary = await loadMonthlySummary(year, month);
-        renderMonthlySummary(summary);
+    // Month selector for monthly summary (now in history view)
+    const monthSelector = document.getElementById('month-selector');
+    if (monthSelector) {
+        monthSelector.addEventListener('change', async (e) => {
+            const [year, month] = e.target.value.split('-');
+            const summary = await loadMonthlySummary(year, month);
+            renderMonthlySummary(summary);
+        });
+    }
+
+    // Transaction filter tabs on home screen
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            state.transactionFilter = tab.dataset.filter;
+            filterAndRenderTransactions();
+        });
     });
 
     // Quick add form
@@ -1077,8 +1104,13 @@ async function navigateToView(view) {
             const now = new Date();
             filterMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-            const transactions = await loadTransactions({ limit: 100 });
+            // Load transactions and monthly summary
+            const [transactions, monthlySummary] = await Promise.all([
+                loadTransactions({ limit: 100 }),
+                loadMonthlySummary()
+            ]);
             renderTransactions(transactions, 'all-transactions-list');
+            renderMonthlySummary(monthlySummary);
             break;
 
         case 'documents':

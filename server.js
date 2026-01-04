@@ -429,7 +429,7 @@ app.get('/api/transactions', authenticate, (req, res) => {
 
   let query = `
     SELECT t.*, c.name as category_name, c.icon as category_icon, c.color as category_color,
-           u.display_name as added_by
+           c.category_group, u.display_name as added_by
     FROM transactions t
     JOIN categories c ON t.category_id = c.id
     JOIN users u ON t.user_id = u.id

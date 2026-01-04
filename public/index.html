@@ -140,21 +140,6 @@
         </div>
       </section>
 
-      <!-- Monthly Summary Section -->
-      <section class="monthly-summary-section">
-        <div class="monthly-summary-card glass">
-          <div class="monthly-header">
-            <h3>📊 Monthly Summary</h3>
-            <select id="month-selector" class="month-selector">
-              <!-- Months loaded dynamically -->
-            </select>
-          </div>
-          <div id="monthly-summary-content" class="monthly-content">
-            <!-- Content loaded dynamically -->
-          </div>
-        </div>
-      </section>
-
       <!-- Quick Add Section -->
       <section class="quick-add-section">
         <div class="quick-add-card glass">
@@ -236,6 +221,11 @@
           <h2>Recent Transactions</h2>
           <button id="view-all-btn" class="btn btn-ghost btn-sm">View All</button>
         </div>
+        <div class="transaction-filter-tabs">
+          <button class="filter-tab active" data-filter="all">All</button>
+          <button class="filter-tab" data-filter="home">🏠 Home</button>
+          <button class="filter-tab" data-filter="office">💼 Office</button>
+        </div>
         <div id="transactions-list" class="transactions-list">
           <!-- Transactions loaded dynamically -->
         </div>
@@ -295,6 +285,21 @@
         </select>
         <input type="month" id="filter-month" class="filter-input">
       </div>
+
+      <!-- Monthly Summary in History View -->
+      <section class="monthly-summary-section" style="padding-top: var(--space-md);">
+        <div class="monthly-summary-card glass">
+          <div class="monthly-header">
+            <h3>📊 Monthly Summary</h3>
+            <select id="month-selector" class="month-selector">
+              <!-- Months loaded dynamically -->
+            </select>
+          </div>
+          <div id="monthly-summary-content" class="monthly-content">
+            <!-- Content loaded dynamically -->
+          </div>
+        </div>
+      </section>
 
       <div id="all-transactions-list" class="transactions-list padded">
         <!-- All transactions loaded dynamically -->

@@ -772,6 +772,39 @@ body::before {
   font-weight: 600;
 }
 
+.transaction-filter-tabs {
+  display: flex;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+  padding: var(--space-xs);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+}
+
+.filter-tab {
+  flex: 1;
+  padding: var(--space-xs) var(--space-sm);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.filter-tab.active {
+  background: var(--bg-glass);
+  color: var(--text-primary);
+}
+
+.filter-tab:hover:not(.active) {
+  color: var(--text-primary);
+}
+
 .transactions-list {
   display: flex;
   flex-direction: column;

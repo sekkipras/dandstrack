@@ -999,8 +999,14 @@ body::before {
   border-color: var(--accent-primary);
 }
 
-#all-transactions-list {
+/* History View Layout - account for fixed header + filter bar */
+#transactions-view .monthly-summary-section {
   margin-top: calc(var(--header-height) + 60px);
+  padding: var(--space-md) var(--space-lg) 0;
+}
+
+#all-transactions-list {
+  margin-top: 0;
 }
 
 /* ========================================

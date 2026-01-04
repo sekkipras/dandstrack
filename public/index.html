@@ -117,25 +117,40 @@
 
       <!-- Summary Cards -->
       <section class="summary-section">
-        <div class="summary-card income-card glass">
-          <div class="summary-icon">📈</div>
-          <div class="summary-content">
-            <span class="summary-label">Income</span>
-            <span id="total-income" class="summary-value">₹0</span>
-          </div>
-        </div>
         <div class="summary-card expense-card glass">
           <div class="summary-icon">📉</div>
           <div class="summary-content">
-            <span class="summary-label">Expenses</span>
+            <span class="summary-label">This Month</span>
             <span id="total-expense" class="summary-value">₹0</span>
           </div>
         </div>
-        <div class="summary-card balance-card glass">
-          <div class="summary-icon">💎</div>
+        <div class="summary-card home-card glass">
+          <div class="summary-icon">🏠</div>
           <div class="summary-content">
-            <span class="summary-label">Balance</span>
-            <span id="total-balance" class="summary-value">₹0</span>
+            <span class="summary-label">Home</span>
+            <span id="total-home" class="summary-value">₹0</span>
+          </div>
+        </div>
+        <div class="summary-card office-card glass">
+          <div class="summary-icon">💼</div>
+          <div class="summary-content">
+            <span class="summary-label">Office</span>
+            <span id="total-office" class="summary-value">₹0</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Monthly Summary Section -->
+      <section class="monthly-summary-section">
+        <div class="monthly-summary-card glass">
+          <div class="monthly-header">
+            <h3>📊 Monthly Summary</h3>
+            <select id="month-selector" class="month-selector">
+              <!-- Months loaded dynamically -->
+            </select>
+          </div>
+          <div id="monthly-summary-content" class="monthly-content">
+            <!-- Content loaded dynamically -->
           </div>
         </div>
       </section>
@@ -144,12 +159,13 @@
       <section class="quick-add-section">
         <div class="quick-add-card glass">
           <div class="quick-add-tabs">
-            <button class="tab-btn active" data-tab="expense">Expense</button>
-            <button class="tab-btn" data-tab="income">Income</button>
+            <button class="tab-btn active" data-tab="home">🏠 Home</button>
+            <button class="tab-btn" data-tab="office">💼 Office</button>
           </div>
 
           <form id="quick-add-form" class="quick-add-form">
             <input type="hidden" id="transaction-type" value="expense">
+            <input type="hidden" id="category-group" value="home">
 
             <div class="amount-input-wrapper">
               <span class="currency-symbol">₹</span>
@@ -166,7 +182,7 @@
               </select>
             </div>
 
-            <!-- Merchant/Location/Source suggestions (learns from past transactions) -->
+            <!-- Merchant/Location suggestions (learns from past transactions) -->
             <div class="merchant-section" id="merchant-section" style="display: none;">
               <div class="form-group">
                 <label for="transaction-merchant" id="merchant-label">Where? (optional)</label>
@@ -273,9 +289,9 @@
 
       <div class="filter-bar glass">
         <select id="filter-type" class="filter-select">
-          <option value="">All Types</option>
-          <option value="expense">Expenses</option>
-          <option value="income">Income</option>
+          <option value="">All Categories</option>
+          <option value="home">🏠 Home</option>
+          <option value="office">💼 Office</option>
         </select>
         <input type="month" id="filter-month" class="filter-input">
       </div>
@@ -383,13 +399,6 @@
       <div class="stats-summary">
         <div class="stat-card glass">
           <div class="stat-header">
-            <span class="stat-icon">📈</span>
-            <span class="stat-title">Total Income</span>
-          </div>
-          <span id="stats-income" class="stat-value income">₹0</span>
-        </div>
-        <div class="stat-card glass">
-          <div class="stat-header">
             <span class="stat-icon">📉</span>
             <span class="stat-title">Total Expenses</span>
           </div>
@@ -397,10 +406,17 @@
         </div>
         <div class="stat-card glass">
           <div class="stat-header">
-            <span class="stat-icon">💎</span>
-            <span class="stat-title">Net Savings</span>
+            <span class="stat-icon">🏠</span>
+            <span class="stat-title">Home Expenses</span>
           </div>
-          <span id="stats-balance" class="stat-value">₹0</span>
+          <span id="stats-home" class="stat-value">₹0</span>
+        </div>
+        <div class="stat-card glass">
+          <div class="stat-header">
+            <span class="stat-icon">💼</span>
+            <span class="stat-title">Office Expenses</span>
+          </div>
+          <span id="stats-office" class="stat-value">₹0</span>
         </div>
       </div>
 
@@ -427,15 +443,15 @@
       </div>
 
       <div class="category-breakdown">
-        <h3>Expense Breakdown</h3>
-        <div id="expense-breakdown" class="breakdown-list">
+        <h3>🏠 Home Expenses</h3>
+        <div id="home-breakdown" class="breakdown-list">
           <!-- Breakdown loaded dynamically -->
         </div>
       </div>
 
       <div class="category-breakdown">
-        <h3>Income Sources</h3>
-        <div id="income-breakdown" class="breakdown-list">
+        <h3>💼 Office Expenses</h3>
+        <div id="office-breakdown" class="breakdown-list">
           <!-- Breakdown loaded dynamically -->
         </div>
       </div>
@@ -474,9 +490,9 @@
 
     <!-- Version Footer -->
     <footer class="version-footer">
-      <span>D&S Expense Tracker v1.2.0</span>
+      <span>D&S Expense Tracker v1.3.0</span>
       <span>•</span>
-      <span>Updated: Dec 24, 2024</span>
+      <span>Updated: Jan 4, 2025</span>
     </footer>
   </div>
 

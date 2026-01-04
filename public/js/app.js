@@ -13,7 +13,7 @@ const state = {
     documents: [],
     selectedCategory: null,
     currentView: 'home',
-    transactionType: 'expense',
+    categoryGroup: 'home',  // 'home' or 'office'
     docCategory: 'all',
     statsPeriod: 'month'
 };
@@ -250,7 +250,7 @@ async function logout() {
 // Categories
 // ========================================
 async function loadCategories() {
-    state.categories = await api.get(`/categories?type=${state.transactionType}`);
+    state.categories = await api.get(`/categories?group=${state.categoryGroup}`);
     renderCategories();
 }
 
@@ -442,18 +442,95 @@ function renderTransactions(transactions, containerId) {
 async function refreshDashboard() {
     const dateRange = utils.getDateRange('month');
 
-    const [summary, transactions] = await Promise.all([
+    const [summary, transactions, monthlySummary] = await Promise.all([
         loadSummary(dateRange),
-        loadTransactions({ ...dateRange, limit: 10 })
+        loadTransactions({ ...dateRange, limit: 10 }),
+        loadMonthlySummary()
     ]);
 
     // Update summary cards
-    document.getElementById('total-income').textContent = utils.formatCurrency(summary.income);
     document.getElementById('total-expense').textContent = utils.formatCurrency(summary.expense);
-    document.getElementById('total-balance').textContent = utils.formatCurrency(summary.balance);
+
+    // Calculate home vs office totals from category breakdown
+    const homeTotal = summary.categoryBreakdown
+        .filter(c => c.category_group === 'home')
+        .reduce((sum, c) => sum + c.total, 0);
+    const officeTotal = summary.categoryBreakdown
+        .filter(c => c.category_group === 'office')
+        .reduce((sum, c) => sum + c.total, 0);
+
+    document.getElementById('total-home').textContent = utils.formatCurrency(homeTotal);
+    document.getElementById('total-office').textContent = utils.formatCurrency(officeTotal);
 
     // Render transactions
     renderTransactions(transactions, 'transactions-list');
+
+    // Render monthly summary
+    renderMonthlySummary(monthlySummary);
+}
+
+// Monthly summary functions
+async function loadMonthlySummary(year = null, month = null) {
+    const params = new URLSearchParams();
+    if (year) params.append('year', year);
+    if (month) params.append('month', month);
+    return api.get(`/transactions/monthly-summary?${params.toString()}`);
+}
+
+function renderMonthlySummary(data) {
+    // Update month selector
+    const selector = document.getElementById('month-selector');
+    if (data.availableMonths && data.availableMonths.length > 0) {
+        selector.innerHTML = data.availableMonths.map(m => {
+            const monthName = new Date(m.year, parseInt(m.month) - 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+            const isSelected = parseInt(m.year) === data.year && parseInt(m.month) === data.month;
+            return `<option value="${m.year}-${m.month}" ${isSelected ? 'selected' : ''}>${monthName}</option>`;
+        }).join('');
+    }
+
+    // Render summary content
+    const content = document.getElementById('monthly-summary-content');
+
+    if (data.transactionCount === 0) {
+        content.innerHTML = `
+            <div class="empty-state" style="padding: 1rem;">
+                <p>No expenses recorded for ${data.monthName}</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Group breakdown
+    const homeTotal = data.groupBreakdown.find(g => g.group_name === 'home')?.total || 0;
+    const officeTotal = data.groupBreakdown.find(g => g.group_name === 'office')?.total || 0;
+
+    content.innerHTML = `
+        <div class="monthly-stats">
+            <div class="monthly-stat total">
+                <span class="label">Total Spent</span>
+                <span class="value">${utils.formatCurrency(data.totalExpense)}</span>
+            </div>
+            <div class="monthly-stat-row">
+                <div class="monthly-stat home">
+                    <span class="label">🏠 Home</span>
+                    <span class="value">${utils.formatCurrency(homeTotal)}</span>
+                </div>
+                <div class="monthly-stat office">
+                    <span class="label">💼 Office</span>
+                    <span class="value">${utils.formatCurrency(officeTotal)}</span>
+                </div>
+            </div>
+        </div>
+        <div class="monthly-categories">
+            ${data.categoryBreakdown.slice(0, 5).map(cat => `
+                <div class="monthly-category-item">
+                    <span class="icon">${cat.icon}</span>
+                    <span class="name">${cat.name}</span>
+                    <span class="amount">${utils.formatCurrency(cat.total)}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
 }
 
 // ========================================
@@ -606,30 +683,26 @@ async function loadStats() {
     const dateRange = utils.getDateRange(state.statsPeriod);
     const summary = await loadSummary(dateRange);
 
-    // Update values
-    document.getElementById('stats-income').textContent = utils.formatCurrency(summary.income);
+    // Update total expense
     document.getElementById('stats-expense').textContent = utils.formatCurrency(summary.expense);
 
-    const balance = summary.balance;
-    const balanceEl = document.getElementById('stats-balance');
-    balanceEl.textContent = utils.formatCurrency(Math.abs(balance));
-    balanceEl.className = 'stat-value ' + (balance >= 0 ? 'income' : 'expense');
-    if (balance < 0) {
-        balanceEl.textContent = '-' + balanceEl.textContent;
-    }
+    // Calculate home vs office totals
+    const homeTotal = summary.categoryBreakdown
+        .filter(c => c.category_group === 'home')
+        .reduce((sum, c) => sum + c.total, 0);
+    const officeTotal = summary.categoryBreakdown
+        .filter(c => c.category_group === 'office')
+        .reduce((sum, c) => sum + c.total, 0);
 
-    // Render breakdowns
-    renderBreakdown(
-        summary.categoryBreakdown.filter(c => c.type === 'expense'),
-        'expense-breakdown',
-        summary.expense
-    );
+    document.getElementById('stats-home').textContent = utils.formatCurrency(homeTotal);
+    document.getElementById('stats-office').textContent = utils.formatCurrency(officeTotal);
 
-    renderBreakdown(
-        summary.categoryBreakdown.filter(c => c.type === 'income'),
-        'income-breakdown',
-        summary.income
-    );
+    // Render breakdowns by group
+    const homeCategories = summary.categoryBreakdown.filter(c => c.category_group === 'home');
+    const officeCategories = summary.categoryBreakdown.filter(c => c.category_group === 'office');
+
+    renderBreakdown(homeCategories, 'home-breakdown', homeTotal);
+    renderBreakdown(officeCategories, 'office-breakdown', officeTotal);
 
     // Load payment summary
     await loadPaymentSummary();
@@ -735,31 +808,25 @@ function setupMainHandlers() {
     // Logout
     document.getElementById('logout-btn').addEventListener('click', logout);
 
-    // Transaction type tabs
+    // Category group tabs (Home/Office)
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
 
-            state.transactionType = btn.dataset.tab;
+            state.categoryGroup = btn.dataset.tab;  // 'home' or 'office'
             state.selectedCategory = null;
-            document.getElementById('transaction-type').value = state.transactionType;
-            document.getElementById('add-transaction-btn').querySelector('span').textContent =
-                `Add ${state.transactionType === 'expense' ? 'Expense' : 'Income'}`;
-
-            // Update merchant/source label and placeholder based on transaction type
-            const merchantLabel = document.getElementById('merchant-label');
-            const merchantInput = document.getElementById('transaction-merchant');
-            if (state.transactionType === 'income') {
-                merchantLabel.textContent = 'Source (optional)';
-                merchantInput.placeholder = 'e.g., Office, Bank Transfer...';
-            } else {
-                merchantLabel.textContent = 'Where? (optional)';
-                merchantInput.placeholder = 'e.g., Big Bazaar, Amazon...';
-            }
+            document.getElementById('category-group').value = state.categoryGroup;
 
             loadCategories();
         });
+    });
+
+    // Month selector for monthly summary
+    document.getElementById('month-selector').addEventListener('change', async (e) => {
+        const [year, month] = e.target.value.split('-');
+        const summary = await loadMonthlySummary(year, month);
+        renderMonthlySummary(summary);
     });
 
     // Quick add form
@@ -784,7 +851,7 @@ function setupMainHandlers() {
 
         try {
             await addTransaction({
-                type: state.transactionType,
+                type: 'expense',  // Always expense now
                 amount,
                 categoryId: state.selectedCategory,
                 merchant: merchant || null,
@@ -793,7 +860,7 @@ function setupMainHandlers() {
                 note
             });
 
-            showToast(`${state.transactionType === 'expense' ? 'Expense' : 'Income'} added!`, 'success');
+            showToast('Expense added!', 'success');
 
             // Reset form
             document.getElementById('amount-input').value = '';
@@ -837,7 +904,7 @@ function setupTransactionsHandlers() {
     filterMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     const applyFilters = utils.debounce(async () => {
-        const type = filterType.value;
+        const group = filterType.value;  // Now filters by category group (home/office)
         const month = filterMonth.value;
 
         let startDate, endDate;
@@ -848,7 +915,16 @@ function setupTransactionsHandlers() {
             endDate = `${year}-${m}-${lastDay}`;
         }
 
-        const transactions = await loadTransactions({ startDate, endDate, type, limit: 100 });
+        // Load transactions with group filter
+        let transactions = await loadTransactions({ startDate, endDate, type: 'expense', limit: 100 });
+
+        // Filter by category group on client side (since we don't have group filter in API for transactions)
+        if (group && ['home', 'office'].includes(group)) {
+            const groupCategories = await api.get(`/categories?group=${group}`);
+            const groupCategoryIds = new Set(groupCategories.map(c => c.id));
+            transactions = transactions.filter(t => groupCategoryIds.has(t.category_id));
+        }
+
         renderTransactions(transactions, 'all-transactions-list');
     }, 300);
 

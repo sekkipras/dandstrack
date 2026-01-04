@@ -36,6 +36,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     type TEXT NOT NULL CHECK(type IN ('expense', 'income', 'both')),
+    category_group TEXT DEFAULT 'home' CHECK(category_group IN ('home', 'office')),
     icon TEXT DEFAULT '💰',
     color TEXT DEFAULT '#6366f1',
     user_id INTEGER,
@@ -99,20 +100,36 @@ try {
   // Indexes might already exist
 }
 
+// Migration: Add category_group column if it doesn't exist
+try {
+  db.exec(`ALTER TABLE categories ADD COLUMN category_group TEXT DEFAULT 'home' CHECK(category_group IN ('home', 'office'))`);
+  console.log('Migration: Added category_group column');
+} catch (e) {
+  // Column already exists, ignore
+}
+
+// Migration: Update Office Expenses to have 'office' group
+try {
+  db.prepare("UPDATE categories SET category_group = 'office' WHERE name = 'Office Expenses'").run();
+  console.log('Migration: Updated Office Expenses to office group');
+} catch (e) {
+  // Ignore errors
+}
+
 // Migration: Add new categories if they don't exist (for existing databases)
 const newCategories = [
-  { name: 'Vegetables & Fruits', type: 'expense', icon: '🥬', color: '#16a34a' },
-  { name: 'Drinking Water', type: 'expense', icon: '💧', color: '#0ea5e9' },
-  { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1' },
-  { name: 'ATM Withdrawal', type: 'income', icon: '🏧', color: '#0ea5e9' },
-  { name: 'Travel Advance', type: 'income', icon: '✈️', color: '#14b8a6' },
+  { name: 'Vegetables & Fruits', type: 'expense', icon: '🥬', color: '#16a34a', group: 'home' },
+  { name: 'Drinking Water', type: 'expense', icon: '💧', color: '#0ea5e9', group: 'home' },
+  { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1', group: 'office' },
+  { name: 'Office Supplies', type: 'expense', icon: '📎', color: '#8b5cf6', group: 'office' },
+  { name: 'Office Travel', type: 'expense', icon: '🚌', color: '#f59e0b', group: 'office' },
 ];
 
 for (const cat of newCategories) {
   const exists = db.prepare('SELECT id FROM categories WHERE name = ? AND is_default = 1').get(cat.name);
   if (!exists) {
-    db.prepare('INSERT INTO categories (name, type, icon, color, is_default) VALUES (?, ?, ?, ?, 1)')
-      .run(cat.name, cat.type, cat.icon, cat.color);
+    db.prepare('INSERT INTO categories (name, type, icon, color, category_group, is_default) VALUES (?, ?, ?, ?, ?, 1)')
+      .run(cat.name, cat.type, cat.icon, cat.color, cat.group);
     console.log(`Migration: Added ${cat.name} category`);
   }
 }
@@ -121,36 +138,31 @@ for (const cat of newCategories) {
 const categoryCount = db.prepare('SELECT COUNT(*) as count FROM categories WHERE is_default = 1').get();
 if (categoryCount.count === 0) {
   const defaultCategories = [
-    // Expense categories
-    { name: 'Food & Dining', type: 'expense', icon: '🍔', color: '#ef4444' },
-    { name: 'Groceries', type: 'expense', icon: '🛒', color: '#f97316' },
-    { name: 'Vegetables & Fruits', type: 'expense', icon: '🥬', color: '#16a34a' },
-    { name: 'Drinking Water', type: 'expense', icon: '💧', color: '#0ea5e9' },
-    { name: 'Transport', type: 'expense', icon: '🚗', color: '#eab308' },
-    { name: 'Utilities', type: 'expense', icon: '💡', color: '#22c55e' },
-    { name: 'Entertainment', type: 'expense', icon: '🎬', color: '#3b82f6' },
-    { name: 'Shopping', type: 'expense', icon: '🛍️', color: '#8b5cf6' },
-    { name: 'Health', type: 'expense', icon: '🏥', color: '#ec4899' },
-    { name: 'Education', type: 'expense', icon: '📚', color: '#14b8a6' },
-    { name: 'Bills', type: 'expense', icon: '📄', color: '#64748b' },
-    { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1' },
-    { name: 'Other Expense', type: 'expense', icon: '📦', color: '#78716c' },
-    // Income categories
-    { name: 'Salary', type: 'income', icon: '💼', color: '#22c55e' },
-    { name: 'Freelance', type: 'income', icon: '💻', color: '#10b981' },
-    { name: 'Investment', type: 'income', icon: '📈', color: '#059669' },
-    { name: 'Gift', type: 'income', icon: '🎁', color: '#34d399' },
-    { name: 'ATM Withdrawal', type: 'income', icon: '🏧', color: '#0ea5e9' },
-    { name: 'Travel Advance', type: 'income', icon: '✈️', color: '#14b8a6' },
-    { name: 'Other Income', type: 'income', icon: '💵', color: '#6ee7b7' },
+    // Home expense categories
+    { name: 'Food & Dining', type: 'expense', icon: '🍔', color: '#ef4444', group: 'home' },
+    { name: 'Groceries', type: 'expense', icon: '🛒', color: '#f97316', group: 'home' },
+    { name: 'Vegetables & Fruits', type: 'expense', icon: '🥬', color: '#16a34a', group: 'home' },
+    { name: 'Drinking Water', type: 'expense', icon: '💧', color: '#0ea5e9', group: 'home' },
+    { name: 'Transport', type: 'expense', icon: '🚗', color: '#eab308', group: 'home' },
+    { name: 'Utilities', type: 'expense', icon: '💡', color: '#22c55e', group: 'home' },
+    { name: 'Entertainment', type: 'expense', icon: '🎬', color: '#3b82f6', group: 'home' },
+    { name: 'Shopping', type: 'expense', icon: '🛍️', color: '#8b5cf6', group: 'home' },
+    { name: 'Health', type: 'expense', icon: '🏥', color: '#ec4899', group: 'home' },
+    { name: 'Education', type: 'expense', icon: '📚', color: '#14b8a6', group: 'home' },
+    { name: 'Bills', type: 'expense', icon: '📄', color: '#64748b', group: 'home' },
+    { name: 'Other Expense', type: 'expense', icon: '📦', color: '#78716c', group: 'home' },
+    // Office expense categories
+    { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1', group: 'office' },
+    { name: 'Office Supplies', type: 'expense', icon: '�', color: '#8b5cf6', group: 'office' },
+    { name: 'Office Travel', type: 'expense', icon: '🚌', color: '#f59e0b', group: 'office' },
   ];
 
   const insertCategory = db.prepare(
-    'INSERT INTO categories (name, type, icon, color, is_default) VALUES (?, ?, ?, ?, 1)'
+    'INSERT INTO categories (name, type, icon, color, category_group, is_default) VALUES (?, ?, ?, ?, ?, 1)'
   );
 
   for (const cat of defaultCategories) {
-    insertCategory.run(cat.name, cat.type, cat.icon, cat.color);
+    insertCategory.run(cat.name, cat.type, cat.icon, cat.color, cat.group);
   }
 }
 
@@ -313,7 +325,7 @@ app.get('/api/auth/setup-status', (req, res) => {
 // ========================
 
 app.get('/api/categories', authenticate, (req, res) => {
-  const { type } = req.query;
+  const { type, group } = req.query;
 
   // Query categories with usage count from transactions (all household members)
   // Most frequently used categories appear first
@@ -329,13 +341,17 @@ app.get('/api/categories', authenticate, (req, res) => {
   `;
   const params = [req.user.id];
 
-  if (type && ['expense', 'income'].includes(type)) {
-    query += " AND (c.type = ? OR c.type = 'both')";
-    params.push(type);
+  // Only show expense categories (income removed)
+  query += " AND c.type = 'expense'";
+
+  // Filter by category group if specified
+  if (group && ['home', 'office'].includes(group)) {
+    query += " AND c.category_group = ?";
+    params.push(group);
   }
 
-  // Order by usage count (most used first), then alphabetically
-  query += ' ORDER BY usage_count DESC, c.name ASC';
+  // Order by group (home first), then usage count, then alphabetically
+  query += ' ORDER BY c.category_group ASC, usage_count DESC, c.name ASC';
 
   const categories = db.prepare(query).all(...params);
   res.json(categories);
@@ -467,6 +483,7 @@ app.get('/api/transactions/summary', authenticate, (req, res) => {
       c.name,
       c.icon,
       c.color,
+      c.category_group,
       t.type,
       SUM(t.amount) as total,
       COUNT(*) as count
@@ -481,7 +498,6 @@ app.get('/api/transactions/summary', authenticate, (req, res) => {
   const expense = summary.find(s => s.type === 'expense')?.total || 0;
 
   res.json({
-    income,
     expense,
     balance: income - expense,
     startDate: defaultStart,
@@ -720,13 +736,102 @@ app.get('/api/documents/categories', authenticate, (req, res) => {
 // ========================
 
 // Health check endpoint (for Uptime Kuma or other monitoring)
+// Monthly summary endpoint - shows summary for a specific month
+app.get('/api/transactions/monthly-summary', authenticate, (req, res) => {
+  const { year, month } = req.query;
+
+  // Default to previous month if not specified
+  const now = new Date();
+  const targetYear = year ? parseInt(year) : (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
+  const targetMonth = month ? parseInt(month) : (now.getMonth() === 0 ? 12 : now.getMonth());
+
+  // Calculate start and end dates for the month
+  const startDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`;
+  const lastDay = new Date(targetYear, targetMonth, 0).getDate();
+  const endDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${lastDay}`;
+
+  // Get total expenses for the month
+  const totals = db.prepare(`
+    SELECT 
+      COALESCE(SUM(amount), 0) as total_expense,
+      COUNT(*) as transaction_count
+    FROM transactions
+    WHERE type = 'expense' AND date >= ? AND date <= ?
+  `).get(startDate, endDate);
+
+  // Get breakdown by category
+  const categoryBreakdown = db.prepare(`
+    SELECT 
+      c.name,
+      c.icon,
+      c.color,
+      c.category_group,
+      SUM(t.amount) as total,
+      COUNT(*) as count
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.id
+    WHERE t.type = 'expense' AND t.date >= ? AND t.date <= ?
+    GROUP BY c.id
+    ORDER BY total DESC
+  `).all(startDate, endDate);
+
+  // Get breakdown by group (home vs office)
+  const groupBreakdown = db.prepare(`
+    SELECT 
+      c.category_group as group_name,
+      SUM(t.amount) as total,
+      COUNT(*) as count
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.id
+    WHERE t.type = 'expense' AND t.date >= ? AND t.date <= ?
+    GROUP BY c.category_group
+    ORDER BY c.category_group ASC
+  `).all(startDate, endDate);
+
+  // Get daily spending pattern
+  const dailySpending = db.prepare(`
+    SELECT 
+      date,
+      SUM(amount) as total
+    FROM transactions
+    WHERE type = 'expense' AND date >= ? AND date <= ?
+    GROUP BY date
+    ORDER BY date ASC
+  `).all(startDate, endDate);
+
+  // Get available months (for dropdown)
+  const availableMonths = db.prepare(`
+    SELECT DISTINCT 
+      strftime('%Y', date) as year,
+      strftime('%m', date) as month
+    FROM transactions
+    WHERE type = 'expense'
+    ORDER BY year DESC, month DESC
+    LIMIT 12
+  `).all();
+
+  res.json({
+    year: targetYear,
+    month: targetMonth,
+    monthName: new Date(targetYear, targetMonth - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+    startDate,
+    endDate,
+    totalExpense: totals.total_expense,
+    transactionCount: totals.transaction_count,
+    categoryBreakdown,
+    groupBreakdown,
+    dailySpending,
+    availableMonths
+  });
+});
+
 app.get('/api/health', (req, res) => {
   try {
     // Quick DB check
     db.prepare('SELECT 1').get();
     res.json({
       status: 'healthy',
-      version: '1.2.0',
+      version: '1.3.0',
       timestamp: new Date().toISOString()
     });
   } catch (err) {
@@ -748,7 +853,7 @@ app.use('/api/*', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
-║         D&S Expense Tracker v1.2.0 - Server Started          ║
+║         D&S Expense Tracker v1.3.0 - Server Started          ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 🚀 Server running on port ${PORT}

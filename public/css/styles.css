@@ -1292,6 +1292,60 @@ body::before {
 }
 
 /* ========================================
+   Settings Modal
+======================================== */
+.settings-section {
+  padding: var(--space-md) 0;
+}
+
+.settings-section h4 {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  margin-bottom: var(--space-xs);
+}
+
+.settings-description {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-md);
+}
+
+.settings-form .form-group {
+  margin-bottom: var(--space-md);
+}
+
+.settings-form label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  margin-bottom: var(--space-xs);
+  color: var(--text-secondary);
+}
+
+.settings-form select,
+.settings-form input {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.settings-form select:focus,
+.settings-form input:focus {
+  border-color: var(--accent-primary);
+}
+
+.settings-form select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* ========================================
    Stats View
 ======================================== */
 .stats-period {

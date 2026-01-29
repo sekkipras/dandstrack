@@ -320,6 +320,40 @@ app.get('/api/auth/setup-status', (req, res) => {
   res.json({ needsSetup: userCount.count === 0, userCount: userCount.count });
 });
 
+// Get all users (for password reset dropdown)
+app.get('/api/auth/users', authenticate, (req, res) => {
+  const users = db.prepare('SELECT id, username, display_name FROM users').all();
+  res.json(users);
+});
+
+// Reset password (any authenticated household member can reset any password)
+app.post('/api/auth/reset-password', authenticate, rateLimitAuth, (req, res) => {
+  const { userId, newPassword } = req.body;
+
+  if (!userId || !newPassword) {
+    return res.status(400).json({ error: 'User ID and new password are required' });
+  }
+
+  if (newPassword.length < 4) {
+    return res.status(400).json({ error: 'Password must be at least 4 characters' });
+  }
+
+  // Verify user exists
+  const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  try {
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, userId);
+    res.json({ success: true, message: `Password reset for ${user.username}` });
+  } catch (err) {
+    console.error('Password reset error:', err);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
 // ========================
 // CATEGORY ROUTES
 // ========================

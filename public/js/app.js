@@ -691,6 +691,65 @@ function viewDocument(id) {
 }
 
 // ========================================
+// Settings Modal
+// ========================================
+async function openSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    const userSelect = document.getElementById('reset-user-select');
+
+    // Load users for the dropdown
+    try {
+        const users = await api.get('/auth/users');
+        userSelect.innerHTML = users.map(u =>
+            `<option value="${u.id}">${u.display_name} (${u.username})</option>`
+        ).join('');
+    } catch (err) {
+        userSelect.innerHTML = '<option value="">Failed to load users</option>';
+    }
+
+    // Clear form
+    document.getElementById('reset-new-password').value = '';
+    document.getElementById('reset-confirm-password').value = '';
+
+    modal.style.display = 'flex';
+}
+
+function closeSettingsModal() {
+    document.getElementById('settings-modal').style.display = 'none';
+}
+
+async function handlePasswordReset(e) {
+    e.preventDefault();
+
+    const userId = document.getElementById('reset-user-select').value;
+    const newPassword = document.getElementById('reset-new-password').value;
+    const confirmPassword = document.getElementById('reset-confirm-password').value;
+
+    if (!userId) {
+        showToast('Please select a user', 'error');
+        return;
+    }
+
+    if (newPassword.length < 4) {
+        showToast('Password must be at least 4 characters', 'error');
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return;
+    }
+
+    try {
+        const result = await api.post('/auth/reset-password', { userId: parseInt(userId), newPassword });
+        showToast(result.message || 'Password reset successfully', 'success');
+        closeSettingsModal();
+    } catch (err) {
+        showToast(err.message || 'Failed to reset password', 'error');
+    }
+}
+
+// ========================================
 // Statistics
 // ========================================
 async function loadStats() {
@@ -821,6 +880,21 @@ function setupAuthHandlers() {
 function setupMainHandlers() {
     // Logout
     document.getElementById('logout-btn').addEventListener('click', logout);
+
+    // Settings modal
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsModal = document.getElementById('settings-modal');
+
+    if (settingsBtn && settingsModal) {
+        settingsBtn.addEventListener('click', openSettingsModal);
+
+        // Close modal handlers
+        settingsModal.querySelector('.modal-backdrop').addEventListener('click', closeSettingsModal);
+        settingsModal.querySelector('.modal-close').addEventListener('click', closeSettingsModal);
+
+        // Password reset form
+        document.getElementById('reset-password-form').addEventListener('submit', handlePasswordReset);
+    }
 
     // Category group tabs (Home/Office)
     document.querySelectorAll('.tab-btn').forEach(btn => {

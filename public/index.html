@@ -154,6 +154,11 @@
             <button class="tab-btn" data-tab="office">💼 Office</button>
           </div>
 
+          <!-- Quick Actions (learned from usage) -->
+          <div class="quick-actions" id="quick-actions">
+            <!-- Dynamically populated with most-used categories -->
+          </div>
+
           <form id="quick-add-form" class="quick-add-form">
             <input type="hidden" id="transaction-type" value="expense">
             <input type="hidden" id="category-group" value="home">
@@ -284,12 +289,47 @@
       </header>
 
       <div class="filter-bar glass">
-        <select id="filter-type" class="filter-select">
-          <option value="">All Categories</option>
-          <option value="home">🏠 Home</option>
-          <option value="office">💼 Office</option>
-        </select>
-        <input type="month" id="filter-month" class="filter-input">
+        <div class="filter-row">
+          <input type="text" id="filter-merchant" class="filter-input" placeholder="Search merchant...">
+          <select id="filter-type" class="filter-select">
+            <option value="">All</option>
+            <option value="home">🏠 Home</option>
+            <option value="office">💼 Office</option>
+          </select>
+        </div>
+        <div class="filter-row">
+          <input type="month" id="filter-month" class="filter-input">
+          <button id="filter-advanced-btn" class="btn btn-ghost btn-sm" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+            </svg>
+            More
+          </button>
+        </div>
+      </div>
+
+      <!-- Advanced Filters Panel -->
+      <div id="advanced-filters" class="advanced-filters glass" style="display: none;">
+        <div class="filter-group">
+          <label>Amount Range</label>
+          <div class="amount-range">
+            <input type="number" id="filter-min-amount" placeholder="Min ₹" step="1">
+            <span>to</span>
+            <input type="number" id="filter-max-amount" placeholder="Max ₹" step="1">
+          </div>
+        </div>
+        <div class="filter-group">
+          <label>Date Range</label>
+          <div class="date-range">
+            <input type="date" id="filter-start-date">
+            <span>to</span>
+            <input type="date" id="filter-end-date">
+          </div>
+        </div>
+        <div class="filter-actions">
+          <button id="clear-filters-btn" class="btn btn-ghost btn-sm" type="button">Clear All</button>
+          <button id="apply-filters-btn" class="btn btn-primary btn-sm" type="button">Apply</button>
+        </div>
       </div>
 
       <!-- Monthly Summary in History View -->
@@ -466,6 +506,34 @@
           <!-- Breakdown loaded dynamically -->
         </div>
       </div>
+
+      <!-- Charts Section -->
+      <section class="chart-section">
+        <div class="chart-card glass">
+          <h3>📊 Spending by Category</h3>
+          <div class="chart-container">
+            <canvas id="category-pie-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="chart-section">
+        <div class="chart-card glass">
+          <h3>📈 Daily Spending Trend</h3>
+          <div class="chart-container chart-line">
+            <canvas id="spending-trend-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="chart-section">
+        <div class="chart-card glass">
+          <h3>📅 Monthly Comparison</h3>
+          <div class="chart-container">
+            <canvas id="monthly-comparison-chart"></canvas>
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- Document Viewer Modal -->
@@ -490,6 +558,60 @@
         </div>
         <div id="doc-viewer-body" class="doc-viewer-body">
           <!-- Document content loaded here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Transaction Modal -->
+    <div id="edit-transaction-modal" class="modal" style="display: none;">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content glass">
+        <div class="modal-header">
+          <h3>Edit Transaction</h3>
+          <button class="modal-close btn btn-ghost btn-icon-only">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="edit-transaction-form" class="settings-form">
+            <input type="hidden" id="edit-transaction-id">
+            <div class="form-group">
+              <label for="edit-amount">Amount</label>
+              <input type="number" id="edit-amount" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-category">Category</label>
+              <select id="edit-category" required>
+                <!-- Categories loaded dynamically -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-merchant">Merchant/Location</label>
+              <input type="text" id="edit-merchant" placeholder="e.g., Big Bazaar, Amazon...">
+            </div>
+            <div class="form-group">
+              <label for="edit-payment-mode">Payment Mode</label>
+              <select id="edit-payment-mode">
+                <option value="cash">💵 Cash</option>
+                <option value="upi">📱 UPI</option>
+                <option value="bank_transfer">🏛️ Bank Transfer</option>
+                <option value="credit_card">💳 Credit Card</option>
+                <option value="debit_card">🏦 Debit Card</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-date">Date</label>
+              <input type="date" id="edit-date" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-note">Note</label>
+              <input type="text" id="edit-note" placeholder="Add a note...">
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">Save Changes</button>
+          </form>
         </div>
       </div>
     </div>
@@ -547,6 +669,7 @@
     </footer>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="/js/app.js"></script>
 </body>
 

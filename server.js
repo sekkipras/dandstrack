@@ -405,6 +405,24 @@ app.post('/api/categories', authenticate, (req, res) => {
   res.json({ id: result.lastInsertRowid, name, type, icon, color });
 });
 
+// Get most used categories for quick actions (learned from usage)
+app.get('/api/categories/popular', authenticate, (req, res) => {
+  const limit = parseInt(req.query.limit) || 5;
+
+  const popular = db.prepare(`
+    SELECT c.*, COUNT(t.id) as usage_count
+    FROM categories c
+    LEFT JOIN transactions t ON c.id = t.category_id
+    WHERE c.is_default = 1 AND c.type = 'expense'
+    GROUP BY c.id
+    HAVING usage_count > 0
+    ORDER BY usage_count DESC
+    LIMIT ?
+  `).all(limit);
+
+  res.json(popular);
+});
+
 // Get suggested merchants for a category (HOUSEHOLD - learns from all users)
 app.get('/api/categories/:id/merchants', authenticate, (req, res) => {
   const categoryId = req.params.id;
@@ -459,7 +477,8 @@ app.post('/api/transactions', authenticate, (req, res) => {
 
 // Get transactions (HOUSEHOLD MODE - shows all users' transactions)
 app.get('/api/transactions', authenticate, (req, res) => {
-  const { startDate, endDate, type, limit = 50, offset = 0 } = req.query;
+  const { startDate, endDate, type, limit = 50, offset = 0,
+          merchant, minAmount, maxAmount, categoryGroup, categoryIds } = req.query;
 
   let query = `
     SELECT t.*, c.name as category_name, c.icon as category_icon, c.color as category_color,
@@ -484,6 +503,37 @@ app.get('/api/transactions', authenticate, (req, res) => {
   if (type && ['expense', 'income'].includes(type)) {
     query += ' AND t.type = ?';
     params.push(type);
+  }
+
+  // Search by merchant (partial match)
+  if (merchant) {
+    query += ' AND t.merchant LIKE ?';
+    params.push(`%${merchant}%`);
+  }
+
+  // Amount range filters
+  if (minAmount) {
+    query += ' AND t.amount >= ?';
+    params.push(parseFloat(minAmount));
+  }
+  if (maxAmount) {
+    query += ' AND t.amount <= ?';
+    params.push(parseFloat(maxAmount));
+  }
+
+  // Category group filter (home/office)
+  if (categoryGroup && ['home', 'office'].includes(categoryGroup)) {
+    query += ' AND c.category_group = ?';
+    params.push(categoryGroup);
+  }
+
+  // Multi-category filter
+  if (categoryIds) {
+    const ids = categoryIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
+    if (ids.length > 0) {
+      query += ` AND t.category_id IN (${ids.map(() => '?').join(',')})`;
+      params.push(...ids);
+    }
   }
 
   query += ' ORDER BY t.date DESC, t.created_at DESC LIMIT ? OFFSET ?';
@@ -634,6 +684,81 @@ app.delete('/api/transactions/:id', authenticate, (req, res) => {
   }
 
   res.json({ success: true });
+});
+
+// Update transaction (any household member can edit)
+app.patch('/api/transactions/:id', authenticate, (req, res) => {
+  const { amount, categoryId, merchant, paymentMode, note, date } = req.body;
+
+  // Validate transaction exists
+  const existing = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
+  if (!existing) {
+    return res.status(404).json({ error: 'Transaction not found' });
+  }
+
+  // Build dynamic update query
+  const updates = [];
+  const params = [];
+
+  if (amount !== undefined) {
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0 || parsedAmount > 10000000) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+    updates.push('amount = ?');
+    params.push(parsedAmount);
+  }
+
+  if (categoryId !== undefined) {
+    updates.push('category_id = ?');
+    params.push(categoryId);
+  }
+
+  if (merchant !== undefined) {
+    updates.push('merchant = ?');
+    params.push(sanitize(merchant, 100));
+  }
+
+  if (paymentMode !== undefined) {
+    const validModes = ['cash', 'upi', 'bank_transfer', 'credit_card', 'debit_card'];
+    updates.push('payment_mode = ?');
+    params.push(validModes.includes(paymentMode) ? paymentMode : 'cash');
+  }
+
+  if (note !== undefined) {
+    updates.push('note = ?');
+    params.push(sanitize(note, 300));
+  }
+
+  if (date !== undefined) {
+    updates.push('date = ?');
+    params.push(date);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: 'No fields to update' });
+  }
+
+  params.push(req.params.id);
+  db.prepare(`UPDATE transactions SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+  res.json({ success: true });
+});
+
+// Get single transaction (for edit form)
+app.get('/api/transactions/:id', authenticate, (req, res) => {
+  const transaction = db.prepare(`
+    SELECT t.*, c.name as category_name, c.icon as category_icon, c.category_group
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.id
+    WHERE t.id = ?
+  `).get(req.params.id);
+
+  if (!transaction) {
+    return res.status(404).json({ error: 'Transaction not found' });
+  }
+
+  res.json(transaction);
 });
 
 // ========================
@@ -857,6 +982,26 @@ app.get('/api/transactions/monthly-summary', authenticate, (req, res) => {
     dailySpending,
     availableMonths
   });
+});
+
+// Get last N months summary for comparison charts
+app.get('/api/transactions/monthly-comparison', authenticate, (req, res) => {
+  const months = parseInt(req.query.months) || 6;
+
+  const data = db.prepare(`
+    SELECT
+      strftime('%Y-%m', date) as month,
+      c.category_group,
+      SUM(amount) as total
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.id
+    WHERE t.type = 'expense'
+      AND date >= date('now', '-' || ? || ' months')
+    GROUP BY strftime('%Y-%m', date), c.category_group
+    ORDER BY month ASC
+  `).all(months);
+
+  res.json(data);
 });
 
 app.get('/api/health', (req, res) => {

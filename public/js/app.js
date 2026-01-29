@@ -73,6 +73,7 @@ const api = {
 
     get: (endpoint) => api.request(endpoint),
     post: (endpoint, data) => api.request(endpoint, { method: 'POST', body: JSON.stringify(data) }),
+    patch: (endpoint, data) => api.request(endpoint, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (endpoint) => api.request(endpoint, { method: 'DELETE' }),
 
     async uploadFile(file, name, category) {
@@ -375,6 +376,15 @@ function renderTransactionItem(tx) {
     };
     const paymentIcon = paymentIcons[tx.payment_mode] || '💵';
 
+    // Data for duplicate button
+    const duplicateData = JSON.stringify({
+        categoryId: tx.category_id,
+        merchant: tx.merchant || '',
+        paymentMode: tx.payment_mode,
+        note: tx.note || '',
+        categoryGroup: tx.category_group
+    }).replace(/"/g, '&quot;');
+
     return `
     <div class="transaction-item" data-id="${tx.id}">
       <div class="transaction-icon" style="background: ${tx.category_color}20">
@@ -392,12 +402,26 @@ function renderTransactionItem(tx) {
       <div class="transaction-amount ${tx.type}">
         ${tx.type === 'income' ? '+' : '-'}${utils.formatCurrency(tx.amount)}
       </div>
-      <button class="transaction-delete" title="Delete">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3,6 5,6 21,6"/>
-          <path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6M8,6V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2V6"/>
-        </svg>
-      </button>
+      <div class="transaction-actions">
+        <button class="transaction-duplicate" title="Add Similar" data-transaction="${duplicateData}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
+        <button class="transaction-edit" title="Edit" data-id="${tx.id}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+        <button class="transaction-delete" title="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3,6 5,6 21,6"/>
+            <path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6M8,6V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2V6"/>
+          </svg>
+        </button>
+      </div>
     </div>
   `;
 }
@@ -434,6 +458,25 @@ function renderTransactions(transactions, containerId) {
                     showToast(err.message, 'error');
                 }
             }
+        });
+    });
+
+    // Add edit handlers
+    container.querySelectorAll('.transaction-edit').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            openEditTransactionModal(id);
+        });
+    });
+
+    // Add duplicate handlers
+    container.querySelectorAll('.transaction-duplicate').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const txData = JSON.parse(btn.dataset.transaction);
+            prefillQuickAddForm(txData);
+            showToast('Form pre-filled. Enter amount and submit.', 'info');
         });
     });
 }
@@ -691,6 +734,351 @@ function viewDocument(id) {
 }
 
 // ========================================
+// Edit Transaction Modal
+// ========================================
+async function openEditTransactionModal(transactionId) {
+    const modal = document.getElementById('edit-transaction-modal');
+    const form = document.getElementById('edit-transaction-form');
+
+    try {
+        // Load transaction data
+        const tx = await api.get(`/transactions/${transactionId}`);
+
+        // Load all categories for the dropdown
+        const allCategories = await api.get('/categories');
+
+        // Populate category dropdown
+        const categorySelect = document.getElementById('edit-category');
+        categorySelect.innerHTML = allCategories.map(c =>
+            `<option value="${c.id}" ${c.id === tx.category_id ? 'selected' : ''}>${c.icon} ${c.name}</option>`
+        ).join('');
+
+        // Fill form fields
+        document.getElementById('edit-transaction-id').value = tx.id;
+        document.getElementById('edit-amount').value = tx.amount;
+        document.getElementById('edit-merchant').value = tx.merchant || '';
+        document.getElementById('edit-payment-mode').value = tx.payment_mode || 'cash';
+        document.getElementById('edit-date').value = tx.date;
+        document.getElementById('edit-note').value = tx.note || '';
+
+        modal.style.display = 'flex';
+    } catch (err) {
+        showToast('Failed to load transaction', 'error');
+    }
+}
+
+function closeEditTransactionModal() {
+    document.getElementById('edit-transaction-modal').style.display = 'none';
+}
+
+async function handleEditTransaction(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('edit-transaction-id').value;
+    const data = {
+        amount: parseFloat(document.getElementById('edit-amount').value),
+        categoryId: parseInt(document.getElementById('edit-category').value),
+        merchant: document.getElementById('edit-merchant').value || null,
+        paymentMode: document.getElementById('edit-payment-mode').value,
+        date: document.getElementById('edit-date').value,
+        note: document.getElementById('edit-note').value || null
+    };
+
+    try {
+        await api.patch(`/transactions/${id}`, data);
+        showToast('Transaction updated', 'success');
+        closeEditTransactionModal();
+        refreshDashboard();
+
+        // Reload transactions view if open
+        if (state.currentView === 'transactions') {
+            applyTransactionFilters();
+        }
+    } catch (err) {
+        showToast(err.message || 'Failed to update transaction', 'error');
+    }
+}
+
+// ========================================
+// Quick Duplicate (Prefill Form)
+// ========================================
+function prefillQuickAddForm(txData) {
+    // Switch to correct category group tab
+    if (txData.categoryGroup) {
+        state.categoryGroup = txData.categoryGroup;
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === txData.categoryGroup);
+        });
+        document.getElementById('category-group').value = txData.categoryGroup;
+
+        // Load categories for that group, then select
+        loadCategories().then(() => {
+            if (txData.categoryId) {
+                document.getElementById('category-select').value = txData.categoryId;
+                state.selectedCategory = txData.categoryId;
+                document.getElementById('merchant-section').style.display = 'block';
+
+                // Load merchant suggestions
+                loadMerchantSuggestions(txData.categoryId).then(renderMerchantSuggestions);
+            }
+        });
+    }
+
+    // Set other fields
+    if (txData.merchant) {
+        document.getElementById('transaction-merchant').value = txData.merchant;
+    }
+    if (txData.paymentMode) {
+        document.getElementById('payment-mode').value = txData.paymentMode;
+    }
+    if (txData.note) {
+        document.getElementById('transaction-note').value = txData.note;
+    }
+
+    // Reset date to today
+    document.getElementById('transaction-date').value = new Date().toISOString().split('T')[0];
+
+    // Clear amount for user to enter
+    document.getElementById('amount-input').value = '';
+
+    // Navigate to home view and scroll to quick add
+    navigateToView('home');
+    setTimeout(() => {
+        document.querySelector('.quick-add-section').scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('amount-input').focus();
+    }, 100);
+}
+
+// ========================================
+// Quick Actions (Learned from Usage)
+// ========================================
+async function loadQuickActions() {
+    try {
+        const popular = await api.get('/categories/popular?limit=4');
+        renderQuickActions(popular);
+    } catch (err) {
+        console.error('Failed to load quick actions:', err);
+    }
+}
+
+function renderQuickActions(categories) {
+    const container = document.getElementById('quick-actions');
+    if (!container) return;
+
+    if (categories.length === 0) {
+        container.innerHTML = '<p class="quick-actions-empty">Quick actions will appear here based on your usage</p>';
+        return;
+    }
+
+    container.innerHTML = categories.map(cat => `
+        <button class="quick-action-btn"
+                data-category-id="${cat.id}"
+                data-category-group="${cat.category_group}"
+                style="--action-color: ${cat.color}">
+            <span class="quick-action-icon">${cat.icon}</span>
+            <span class="quick-action-name">${cat.name.split(' ')[0]}</span>
+        </button>
+    `).join('');
+
+    // Add click handlers
+    container.querySelectorAll('.quick-action-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const categoryId = parseInt(btn.dataset.categoryId);
+            const categoryGroup = btn.dataset.categoryGroup;
+
+            // Switch to correct group tab
+            state.categoryGroup = categoryGroup;
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.tab === categoryGroup);
+            });
+            document.getElementById('category-group').value = categoryGroup;
+
+            // Load categories for that group, then select
+            loadCategories().then(() => {
+                document.getElementById('category-select').value = categoryId;
+                state.selectedCategory = categoryId;
+                document.getElementById('merchant-section').style.display = 'block';
+
+                // Load merchant suggestions
+                loadMerchantSuggestions(categoryId).then(renderMerchantSuggestions);
+
+                // Focus amount input
+                document.getElementById('amount-input').focus();
+            });
+        });
+    });
+}
+
+// ========================================
+// Charts
+// ========================================
+let categoryPieChart = null;
+let spendingTrendChart = null;
+let monthlyComparisonChart = null;
+
+async function loadCharts() {
+    if (typeof Chart === 'undefined') return;
+
+    const dateRange = utils.getDateRange(state.statsPeriod);
+
+    try {
+        const [summary, monthlySummary, monthlyComparison] = await Promise.all([
+            loadSummary(dateRange),
+            loadMonthlySummary(),
+            api.get('/transactions/monthly-comparison?months=6')
+        ]);
+
+        renderCategoryPieChart(summary.categoryBreakdown);
+        renderSpendingTrendChart(monthlySummary.dailySpending);
+        renderMonthlyComparisonChart(monthlyComparison);
+    } catch (err) {
+        console.error('Failed to load charts:', err);
+    }
+}
+
+function renderCategoryPieChart(data) {
+    const ctx = document.getElementById('category-pie-chart');
+    if (!ctx || !data || data.length === 0) return;
+
+    if (categoryPieChart) categoryPieChart.destroy();
+
+    // Filter to top 8 categories with spending
+    const topCategories = data.filter(c => c.total > 0).slice(0, 8);
+    if (topCategories.length === 0) return;
+
+    categoryPieChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: topCategories.map(c => c.name),
+            datasets: [{
+                data: topCategories.map(c => c.total),
+                backgroundColor: topCategories.map(c => c.color),
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        color: '#94a3b8',
+                        font: { size: 11 },
+                        boxWidth: 12,
+                        padding: 8
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderSpendingTrendChart(data) {
+    const ctx = document.getElementById('spending-trend-chart');
+    if (!ctx || !data || data.length === 0) return;
+
+    if (spendingTrendChart) spendingTrendChart.destroy();
+
+    spendingTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => new Date(d.date).getDate()),
+            datasets: [{
+                label: 'Daily Spending',
+                data: data.map(d => d.total),
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: '#6366f1'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#64748b' }
+                },
+                y: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: {
+                        color: '#64748b',
+                        callback: v => '₹' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v)
+                    }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+function renderMonthlyComparisonChart(data) {
+    const ctx = document.getElementById('monthly-comparison-chart');
+    if (!ctx || !data || data.length === 0) return;
+
+    if (monthlyComparisonChart) monthlyComparisonChart.destroy();
+
+    // Process data into home/office series
+    const months = [...new Set(data.map(d => d.month))].sort();
+    const homeData = months.map(m =>
+        data.find(d => d.month === m && d.category_group === 'home')?.total || 0
+    );
+    const officeData = months.map(m =>
+        data.find(d => d.month === m && d.category_group === 'office')?.total || 0
+    );
+
+    monthlyComparisonChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: months.map(m => {
+                const [y, mon] = m.split('-');
+                return new Date(y, mon - 1).toLocaleDateString('en-IN', { month: 'short' });
+            }),
+            datasets: [
+                {
+                    label: 'Home',
+                    data: homeData,
+                    backgroundColor: '#3b82f6'
+                },
+                {
+                    label: 'Office',
+                    data: officeData,
+                    backgroundColor: '#8b5cf6'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#64748b' }
+                },
+                y: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: {
+                        color: '#64748b',
+                        callback: v => '₹' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v)
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#94a3b8', boxWidth: 12 }
+                }
+            }
+        }
+    });
+}
+
+// ========================================
 // Settings Modal
 // ========================================
 async function openSettingsModal() {
@@ -779,6 +1167,9 @@ async function loadStats() {
 
     // Load payment summary
     await loadPaymentSummary();
+
+    // Load charts
+    await loadCharts();
 }
 
 async function loadPaymentSummary() {
@@ -896,6 +1287,14 @@ function setupMainHandlers() {
         document.getElementById('reset-password-form').addEventListener('submit', handlePasswordReset);
     }
 
+    // Edit transaction modal
+    const editModal = document.getElementById('edit-transaction-modal');
+    if (editModal) {
+        editModal.querySelector('.modal-backdrop').addEventListener('click', closeEditTransactionModal);
+        editModal.querySelector('.modal-close').addEventListener('click', closeEditTransactionModal);
+        document.getElementById('edit-transaction-form').addEventListener('submit', handleEditTransaction);
+    }
+
     // Category group tabs (Home/Office)
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -997,40 +1396,90 @@ function setupTransactionsHandlers() {
         navigateToView('home');
     });
 
+    const filterMerchant = document.getElementById('filter-merchant');
     const filterType = document.getElementById('filter-type');
     const filterMonth = document.getElementById('filter-month');
+    const advancedBtn = document.getElementById('filter-advanced-btn');
+    const advancedFilters = document.getElementById('advanced-filters');
+    const clearFiltersBtn = document.getElementById('clear-filters-btn');
+    const applyFiltersBtn = document.getElementById('apply-filters-btn');
 
     // Set default month
     const now = new Date();
     filterMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    const applyFilters = utils.debounce(async () => {
-        const group = filterType.value;  // Now filters by category group (home/office)
-        const month = filterMonth.value;
+    // Toggle advanced filters panel
+    advancedBtn.addEventListener('click', () => {
+        advancedFilters.style.display = advancedFilters.style.display === 'none' ? 'block' : 'none';
+    });
 
-        let startDate, endDate;
-        if (month) {
-            const [year, m] = month.split('-');
-            startDate = `${year}-${m}-01`;
-            const lastDay = new Date(parseInt(year), parseInt(m), 0).getDate();
-            endDate = `${year}-${m}-${lastDay}`;
-        }
+    // Clear all filters
+    clearFiltersBtn.addEventListener('click', () => {
+        filterMerchant.value = '';
+        filterType.value = '';
+        filterMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        document.getElementById('filter-min-amount').value = '';
+        document.getElementById('filter-max-amount').value = '';
+        document.getElementById('filter-start-date').value = '';
+        document.getElementById('filter-end-date').value = '';
+        applyTransactionFilters();
+    });
 
-        // Load transactions with group filter
-        let transactions = await loadTransactions({ startDate, endDate, type: 'expense', limit: 100 });
+    // Apply filters button
+    applyFiltersBtn.addEventListener('click', () => {
+        advancedFilters.style.display = 'none';
+        applyTransactionFilters();
+    });
 
-        // Filter by category group on client side (since we don't have group filter in API for transactions)
-        if (group && ['home', 'office'].includes(group)) {
-            const groupCategories = await api.get(`/categories?group=${group}`);
-            const groupCategoryIds = new Set(groupCategories.map(c => c.id));
-            transactions = transactions.filter(t => groupCategoryIds.has(t.category_id));
-        }
+    // Real-time filtering for main inputs
+    filterMerchant.addEventListener('input', utils.debounce(applyTransactionFilters, 300));
+    filterType.addEventListener('change', applyTransactionFilters);
+    filterMonth.addEventListener('change', applyTransactionFilters);
+}
 
-        renderTransactions(transactions, 'all-transactions-list');
-    }, 300);
+async function applyTransactionFilters() {
+    const filterMerchant = document.getElementById('filter-merchant');
+    const filterType = document.getElementById('filter-type');
+    const filterMonth = document.getElementById('filter-month');
 
-    filterType.addEventListener('change', applyFilters);
-    filterMonth.addEventListener('change', applyFilters);
+    const merchant = filterMerchant?.value || '';
+    const group = filterType?.value || '';
+    const month = filterMonth?.value || '';
+
+    const minAmount = document.getElementById('filter-min-amount')?.value || '';
+    const maxAmount = document.getElementById('filter-max-amount')?.value || '';
+    const startDateCustom = document.getElementById('filter-start-date')?.value || '';
+    const endDateCustom = document.getElementById('filter-end-date')?.value || '';
+
+    // Build date range
+    let startDate, endDate;
+    if (startDateCustom || endDateCustom) {
+        // Use custom date range if specified
+        startDate = startDateCustom || undefined;
+        endDate = endDateCustom || undefined;
+    } else if (month) {
+        // Use month picker
+        const [year, m] = month.split('-');
+        startDate = `${year}-${m}-01`;
+        const lastDay = new Date(parseInt(year), parseInt(m), 0).getDate();
+        endDate = `${year}-${m}-${lastDay}`;
+    }
+
+    // Build query params
+    const params = {
+        startDate,
+        endDate,
+        type: 'expense',
+        limit: 200
+    };
+
+    if (merchant) params.merchant = merchant;
+    if (minAmount) params.minAmount = minAmount;
+    if (maxAmount) params.maxAmount = maxAmount;
+    if (group) params.categoryGroup = group;
+
+    const transactions = await loadTransactions(params);
+    renderTransactions(transactions, 'all-transactions-list');
 }
 
 function setupDocumentsHandlers() {
@@ -1212,7 +1661,8 @@ async function initApp() {
     // Load initial data
     await Promise.all([
         loadCategories(),
-        refreshDashboard()
+        refreshDashboard(),
+        loadQuickActions()
     ]);
 
     showScreen('main-screen');

@@ -1706,16 +1706,22 @@ async function navigateToView(view) {
             const lastDay = new Date(year, monthNum, 0).getDate();
             const endDate = `${year}-${month}-${lastDay}`;
 
-            // Load transactions and monthly summary for the SAME month
+            // Load transactions and monthly summary independently
+            // so one failure doesn't block the other
             try {
-                const [transactions, monthlySummary] = await Promise.all([
-                    loadTransactions({ startDate, endDate, limit: 200 }),
-                    loadMonthlySummary(year, monthNum)
-                ]);
+                const transactions = await loadTransactions({ startDate, endDate, limit: 200 });
                 renderTransactions(transactions, 'all-transactions-list');
+            } catch (err) {
+                console.error('Error loading transactions:', err);
+                document.getElementById('all-transactions-list').innerHTML =
+                    '<div class="empty-state" style="padding:2rem;text-align:center"><p>Could not load transactions</p></div>';
+            }
+
+            try {
+                const monthlySummary = await loadMonthlySummary(String(year), String(monthNum));
                 renderMonthlySummary(monthlySummary);
             } catch (err) {
-                console.error('Error loading transactions view:', err);
+                console.error('Error loading monthly summary:', err);
             }
             break;
 

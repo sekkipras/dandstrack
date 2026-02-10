@@ -195,6 +195,13 @@ function showScreen(screenId) {
         screen.style.display = 'none';
     });
     document.getElementById(screenId).style.display = 'block';
+
+    // Show/hide bottom nav based on screen
+    const bottomNav = document.getElementById('bottom-nav');
+    if (bottomNav) {
+        const isAppScreen = ['main-screen', 'transactions-view', 'documents-view', 'stats-view'].includes(screenId);
+        bottomNav.style.display = isAppScreen ? 'flex' : 'none';
+    }
 }
 
 function showLoading() {
@@ -297,43 +304,72 @@ function renderCategories() {
     };
 }
 
+// Store current merchants for filtering
+let currentMerchants = [];
+
 function renderMerchantSuggestions(merchants) {
     const suggestionsEl = document.getElementById('merchant-suggestions');
     const merchantInput = document.getElementById('transaction-merchant');
+
+    // Store merchants for live filtering
+    currentMerchants = merchants;
 
     if (merchants.length === 0) {
         suggestionsEl.style.display = 'none';
         return;
     }
 
-    suggestionsEl.innerHTML = merchants.map(m => `
-        <button type="button" class="merchant-suggestion" data-merchant="${m.merchant}">
-            <span class="name">${m.merchant}</span>
-            <span class="count">${m.usage_count}x</span>
-        </button>
-    `).join('');
+    // Remove old event listeners by replacing element references
+    const newInput = merchantInput;
 
-    // Show on focus
-    merchantInput.addEventListener('focus', () => {
-        if (merchants.length > 0) {
-            suggestionsEl.style.display = 'block';
+    function renderFilteredSuggestions(filterText) {
+        const filtered = filterText
+            ? currentMerchants.filter(m => m.merchant.toLowerCase().includes(filterText.toLowerCase()))
+            : currentMerchants;
+
+        if (filtered.length === 0) {
+            suggestionsEl.style.display = 'none';
+            return;
         }
-    });
+
+        suggestionsEl.innerHTML = filtered.map(m => `
+            <button type="button" class="merchant-suggestion" data-merchant="${m.merchant}">
+                <span class="name">${m.merchant}</span>
+                <span class="count">${m.usage_count}x</span>
+            </button>
+        `).join('');
+
+        suggestionsEl.style.display = 'block';
+
+        // Handle suggestion clicks
+        suggestionsEl.querySelectorAll('.merchant-suggestion').forEach(btn => {
+            btn.addEventListener('click', () => {
+                merchantInput.value = btn.dataset.merchant;
+                suggestionsEl.style.display = 'none';
+            });
+        });
+    }
+
+    // Show on focus with current filter text
+    newInput.onfocus = () => {
+        renderFilteredSuggestions(newInput.value);
+    };
+
+    // Live filter as user types
+    newInput.oninput = () => {
+        renderFilteredSuggestions(newInput.value);
+    };
 
     // Hide on blur (with delay for click)
-    merchantInput.addEventListener('blur', () => {
+    newInput.onblur = () => {
         setTimeout(() => {
             suggestionsEl.style.display = 'none';
         }, 200);
-    });
+    };
 
-    // Handle suggestion clicks
-    suggestionsEl.querySelectorAll('.merchant-suggestion').forEach(btn => {
-        btn.addEventListener('click', () => {
-            merchantInput.value = btn.dataset.merchant;
-            suggestionsEl.style.display = 'none';
-        });
-    });
+    // Show initial suggestions
+    renderFilteredSuggestions('');
+    suggestionsEl.style.display = 'none';  // Hidden until focus
 }
 
 // ========================================
@@ -345,6 +381,10 @@ async function loadTransactions(options = {}) {
     if (options.endDate) params.append('endDate', options.endDate);
     if (options.type) params.append('type', options.type);
     if (options.limit) params.append('limit', options.limit);
+    if (options.merchant) params.append('merchant', options.merchant);
+    if (options.minAmount) params.append('minAmount', options.minAmount);
+    if (options.maxAmount) params.append('maxAmount', options.maxAmount);
+    if (options.categoryGroup) params.append('categoryGroup', options.categoryGroup);
 
     return api.get(`/transactions?${params.toString()}`);
 }
@@ -1007,7 +1047,7 @@ function renderSpendingTrendChart(data) {
                     grid: { color: 'rgba(255,255,255,0.05)' },
                     ticks: {
                         color: '#64748b',
-                        callback: v => '₹' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v)
+                        callback: v => '₹' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)
                     }
                 }
             },
@@ -1065,7 +1105,7 @@ function renderMonthlyComparisonChart(data) {
                     grid: { color: 'rgba(255,255,255,0.05)' },
                     ticks: {
                         color: '#64748b',
-                        callback: v => '₹' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v)
+                        callback: v => '₹' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)
                     }
                 }
             },
@@ -1616,6 +1656,12 @@ async function navigateToView(view) {
         item.classList.toggle('active', item.dataset.view === view);
     });
 
+    // Show/hide bottom nav based on view
+    const bottomNav = document.querySelector('.bottom-nav');
+    if (bottomNav) {
+        bottomNav.style.display = 'flex';
+    }
+
     switch (view) {
         case 'home':
             showScreen('main-screen');
@@ -1627,9 +1673,16 @@ async function navigateToView(view) {
             const now = new Date();
             filterMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-            // Load transactions and monthly summary
+            // Build proper date range for the current month
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const startDate = `${year}-${month}-01`;
+            const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+            const endDate = `${year}-${month}-${lastDay}`;
+
+            // Load transactions for current month and monthly summary
             const [transactions, monthlySummary] = await Promise.all([
-                loadTransactions({ limit: 100 }),
+                loadTransactions({ startDate, endDate, limit: 200 }),
                 loadMonthlySummary()
             ]);
             renderTransactions(transactions, 'all-transactions-list');

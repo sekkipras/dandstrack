@@ -123,6 +123,11 @@ const newCategories = [
   { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1', group: 'office' },
   { name: 'Office Supplies', type: 'expense', icon: '📎', color: '#8b5cf6', group: 'office' },
   { name: 'Office Travel', type: 'expense', icon: '🚌', color: '#f59e0b', group: 'office' },
+  // v1.4.0 - New categories based on spending analysis
+  { name: 'Jewellery', type: 'expense', icon: '💎', color: '#d946ef', group: 'home' },
+  { name: 'Personal Care', type: 'expense', icon: '💆', color: '#f472b6', group: 'home' },
+  { name: 'Insurance', type: 'expense', icon: '🛡️', color: '#0891b2', group: 'home' },
+  { name: 'Pharmacy', type: 'expense', icon: '💊', color: '#e11d48', group: 'home' },
 ];
 
 for (const cat of newCategories) {
@@ -132,6 +137,61 @@ for (const cat of newCategories) {
       .run(cat.name, cat.type, cat.icon, cat.color, cat.group);
     console.log(`Migration: Added ${cat.name} category`);
   }
+}
+
+// v1.4.0 Migration: Recategorize existing transactions based on merchant names
+// This runs once - moves transactions to more appropriate categories
+try {
+  const insuranceCat = db.prepare("SELECT id FROM categories WHERE name = 'Insurance' AND is_default = 1").get();
+  const jewCat = db.prepare("SELECT id FROM categories WHERE name = 'Jewellery' AND is_default = 1").get();
+  const pharmCat = db.prepare("SELECT id FROM categories WHERE name = 'Pharmacy' AND is_default = 1").get();
+  const persCat = db.prepare("SELECT id FROM categories WHERE name = 'Personal Care' AND is_default = 1").get();
+
+  if (insuranceCat) {
+    // Move insurance-related transactions
+    const insurancePatterns = ['%insurance%', '%ergo%', '%icici lombard%', '%lic%premium%'];
+    for (const pattern of insurancePatterns) {
+      const result = db.prepare(
+        "UPDATE transactions SET category_id = ? WHERE LOWER(merchant) LIKE ? AND category_id != ?"
+      ).run(insuranceCat.id, pattern, insuranceCat.id);
+      if (result.changes > 0) console.log(`Migration: Moved ${result.changes} transactions to Insurance (pattern: ${pattern})`);
+    }
+  }
+
+  if (jewCat) {
+    // Move jewellery-related transactions
+    const jewPatterns = ['%tanishq%', '%kalyan%', '%joyalukkas%', '%malabar%', '%jewel%'];
+    for (const pattern of jewPatterns) {
+      const result = db.prepare(
+        "UPDATE transactions SET category_id = ? WHERE LOWER(merchant) LIKE ? AND category_id != ?"
+      ).run(jewCat.id, pattern, jewCat.id);
+      if (result.changes > 0) console.log(`Migration: Moved ${result.changes} transactions to Jewellery (pattern: ${pattern})`);
+    }
+  }
+
+  if (pharmCat) {
+    // Move pharmacy-related transactions
+    const pharmPatterns = ['%pharmacy%', '%pharma%', '%medplus%', '%apollo pharmacy%', '%netmeds%'];
+    for (const pattern of pharmPatterns) {
+      const result = db.prepare(
+        "UPDATE transactions SET category_id = ? WHERE LOWER(merchant) LIKE ? AND category_id != ?"
+      ).run(pharmCat.id, pattern, pharmCat.id);
+      if (result.changes > 0) console.log(`Migration: Moved ${result.changes} transactions to Pharmacy (pattern: ${pattern})`);
+    }
+  }
+
+  if (persCat) {
+    // Move personal care-related transactions
+    const persPatterns = ['%hair cut%', '%haircut%', '%salon%', '%spa%', '%parlour%', '%parlor%'];
+    for (const pattern of persPatterns) {
+      const result = db.prepare(
+        "UPDATE transactions SET category_id = ? WHERE LOWER(merchant) LIKE ? AND category_id != ?"
+      ).run(persCat.id, pattern, persCat.id);
+      if (result.changes > 0) console.log(`Migration: Moved ${result.changes} transactions to Personal Care (pattern: ${pattern})`);
+    }
+  }
+} catch (e) {
+  console.log('Migration: Category recategorization skipped or already done -', e.message);
 }
 
 // Insert default categories if none exist
@@ -148,12 +208,16 @@ if (categoryCount.count === 0) {
     { name: 'Entertainment', type: 'expense', icon: '🎬', color: '#3b82f6', group: 'home' },
     { name: 'Shopping', type: 'expense', icon: '🛍️', color: '#8b5cf6', group: 'home' },
     { name: 'Health', type: 'expense', icon: '🏥', color: '#ec4899', group: 'home' },
+    { name: 'Pharmacy', type: 'expense', icon: '💊', color: '#e11d48', group: 'home' },
+    { name: 'Insurance', type: 'expense', icon: '🛡️', color: '#0891b2', group: 'home' },
+    { name: 'Jewellery', type: 'expense', icon: '💎', color: '#d946ef', group: 'home' },
+    { name: 'Personal Care', type: 'expense', icon: '💆', color: '#f472b6', group: 'home' },
     { name: 'Education', type: 'expense', icon: '📚', color: '#14b8a6', group: 'home' },
     { name: 'Bills', type: 'expense', icon: '📄', color: '#64748b', group: 'home' },
     { name: 'Other Expense', type: 'expense', icon: '📦', color: '#78716c', group: 'home' },
     // Office expense categories
     { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1', group: 'office' },
-    { name: 'Office Supplies', type: 'expense', icon: '�', color: '#8b5cf6', group: 'office' },
+    { name: 'Office Supplies', type: 'expense', icon: '📎', color: '#8b5cf6', group: 'office' },
     { name: 'Office Travel', type: 'expense', icon: '🚌', color: '#f59e0b', group: 'office' },
   ];
 
@@ -478,7 +542,7 @@ app.post('/api/transactions', authenticate, (req, res) => {
 // Get transactions (HOUSEHOLD MODE - shows all users' transactions)
 app.get('/api/transactions', authenticate, (req, res) => {
   const { startDate, endDate, type, limit = 50, offset = 0,
-          merchant, minAmount, maxAmount, categoryGroup, categoryIds } = req.query;
+    merchant, minAmount, maxAmount, categoryGroup, categoryIds } = req.query;
 
   let query = `
     SELECT t.*, c.name as category_name, c.icon as category_icon, c.color as category_color,
@@ -1010,7 +1074,7 @@ app.get('/api/health', (req, res) => {
     db.prepare('SELECT 1').get();
     res.json({
       status: 'healthy',
-      version: '1.3.0',
+      version: '1.4.0',
       timestamp: new Date().toISOString()
     });
   } catch (err) {
@@ -1032,7 +1096,7 @@ app.use('/api/*', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
-║         D&S Expense Tracker v1.3.0 - Server Started          ║
+║         D&S Expense Tracker v1.4.0 - Server Started          ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 🚀 Server running on port ${PORT}

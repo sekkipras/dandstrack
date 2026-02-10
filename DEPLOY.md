@@ -139,5 +139,5 @@ docker logs dands-expense
 
 ## �📊 Version
 
-Current version: **v1.2.0**  
-Last updated: **Dec 22, 2024**
+Current version: **v1.4.0**  
+Last updated: **Feb 10, 2026**

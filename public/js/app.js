@@ -575,59 +575,71 @@ async function loadMonthlySummary(year = null, month = null) {
 }
 
 function renderMonthlySummary(data) {
-    // Update month selector
-    const selector = document.getElementById('month-selector');
-    if (data.availableMonths && data.availableMonths.length > 0) {
-        selector.innerHTML = data.availableMonths.map(m => {
-            const monthName = new Date(m.year, parseInt(m.month) - 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-            const isSelected = parseInt(m.year) === data.year && parseInt(m.month) === data.month;
-            return `<option value="${m.year}-${m.month}" ${isSelected ? 'selected' : ''}>${monthName}</option>`;
-        }).join('');
-    }
+    try {
+        // Update month selector
+        const selector = document.getElementById('month-selector');
+        if (data.availableMonths && data.availableMonths.length > 0) {
+            selector.innerHTML = data.availableMonths.map(m => {
+                const monthName = new Date(m.year, parseInt(m.month) - 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+                const isSelected = parseInt(m.year) === data.year && parseInt(m.month) === data.month;
+                return `<option value="${m.year}-${m.month}" ${isSelected ? 'selected' : ''}>${monthName}</option>`;
+            }).join('');
+        }
 
-    // Render summary content
-    const content = document.getElementById('monthly-summary-content');
+        // Render summary content
+        const content = document.getElementById('monthly-summary-content');
 
-    if (data.transactionCount === 0) {
+        if (!data || data.transactionCount === 0) {
+            content.innerHTML = `
+                <div class="empty-state" style="padding: 1rem;">
+                    <p>No expenses recorded for ${data?.monthName || 'this month'}</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Group breakdown
+        const homeTotal = data.groupBreakdown?.find(g => g.group_name === 'home')?.total || 0;
+        const officeTotal = data.groupBreakdown?.find(g => g.group_name === 'office')?.total || 0;
+
         content.innerHTML = `
-            <div class="empty-state" style="padding: 1rem;">
-                <p>No expenses recorded for ${data.monthName}</p>
+            <div class="monthly-stats">
+                <div class="monthly-stat total">
+                    <span class="label">Total Spent</span>
+                    <span class="value">${utils.formatCurrency(data.totalExpense)}</span>
+                </div>
+                <div class="monthly-stat-row">
+                    <div class="monthly-stat home">
+                        <span class="label">🏠 Home</span>
+                        <span class="value">${utils.formatCurrency(homeTotal)}</span>
+                    </div>
+                    <div class="monthly-stat office">
+                        <span class="label">💼 Office</span>
+                        <span class="value">${utils.formatCurrency(officeTotal)}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="monthly-categories">
+                ${(data.categoryBreakdown || []).slice(0, 5).map(cat => `
+                    <div class="monthly-category-item">
+                        <span class="icon">${cat.icon}</span>
+                        <span class="name">${cat.name}</span>
+                        <span class="amount">${utils.formatCurrency(cat.total)}</span>
+                    </div>
+                `).join('')}
             </div>
         `;
-        return;
+    } catch (err) {
+        console.error('Error rendering monthly summary:', err);
+        const content = document.getElementById('monthly-summary-content');
+        if (content) {
+            content.innerHTML = `
+                <div class="empty-state" style="padding: 1rem;">
+                    <p>Could not load summary</p>
+                </div>
+            `;
+        }
     }
-
-    // Group breakdown
-    const homeTotal = data.groupBreakdown.find(g => g.group_name === 'home')?.total || 0;
-    const officeTotal = data.groupBreakdown.find(g => g.group_name === 'office')?.total || 0;
-
-    content.innerHTML = `
-        <div class="monthly-stats">
-            <div class="monthly-stat total">
-                <span class="label">Total Spent</span>
-                <span class="value">${utils.formatCurrency(data.totalExpense)}</span>
-            </div>
-            <div class="monthly-stat-row">
-                <div class="monthly-stat home">
-                    <span class="label">🏠 Home</span>
-                    <span class="value">${utils.formatCurrency(homeTotal)}</span>
-                </div>
-                <div class="monthly-stat office">
-                    <span class="label">💼 Office</span>
-                    <span class="value">${utils.formatCurrency(officeTotal)}</span>
-                </div>
-            </div>
-        </div>
-        <div class="monthly-categories">
-            ${data.categoryBreakdown.slice(0, 5).map(cat => `
-                <div class="monthly-category-item">
-                    <span class="icon">${cat.icon}</span>
-                    <span class="name">${cat.name}</span>
-                    <span class="amount">${utils.formatCurrency(cat.total)}</span>
-                </div>
-            `).join('')}
-        </div>
-    `;
 }
 
 // ========================================
@@ -1474,7 +1486,20 @@ function setupTransactionsHandlers() {
     // Real-time filtering for main inputs
     filterMerchant.addEventListener('input', utils.debounce(applyTransactionFilters, 300));
     filterType.addEventListener('change', applyTransactionFilters);
-    filterMonth.addEventListener('change', applyTransactionFilters);
+    filterMonth.addEventListener('change', async () => {
+        applyTransactionFilters();
+        // Also update monthly summary to match
+        const monthVal = filterMonth.value;
+        if (monthVal) {
+            const [y, m] = monthVal.split('-');
+            try {
+                const summary = await loadMonthlySummary(y, m);
+                renderMonthlySummary(summary);
+            } catch (err) {
+                console.error('Error loading monthly summary:', err);
+            }
+        }
+    });
 }
 
 async function applyTransactionFilters() {
@@ -1671,22 +1696,27 @@ async function navigateToView(view) {
             showScreen('transactions-view');
             const filterMonth = document.getElementById('filter-month');
             const now = new Date();
-            filterMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const year = now.getFullYear();
+            const monthNum = now.getMonth() + 1;
+            const month = String(monthNum).padStart(2, '0');
+            filterMonth.value = `${year}-${month}`;
 
             // Build proper date range for the current month
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
             const startDate = `${year}-${month}-01`;
-            const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+            const lastDay = new Date(year, monthNum, 0).getDate();
             const endDate = `${year}-${month}-${lastDay}`;
 
-            // Load transactions for current month and monthly summary
-            const [transactions, monthlySummary] = await Promise.all([
-                loadTransactions({ startDate, endDate, limit: 200 }),
-                loadMonthlySummary()
-            ]);
-            renderTransactions(transactions, 'all-transactions-list');
-            renderMonthlySummary(monthlySummary);
+            // Load transactions and monthly summary for the SAME month
+            try {
+                const [transactions, monthlySummary] = await Promise.all([
+                    loadTransactions({ startDate, endDate, limit: 200 }),
+                    loadMonthlySummary(year, monthNum)
+                ]);
+                renderTransactions(transactions, 'all-transactions-list');
+                renderMonthlySummary(monthlySummary);
+            } catch (err) {
+                console.error('Error loading transactions view:', err);
+            }
             break;
 
         case 'documents':

@@ -809,7 +809,119 @@ app.patch('/api/transactions/:id', authenticate, (req, res) => {
   res.json({ success: true });
 });
 
+// Monthly summary endpoint - shows summary for a specific month
+// IMPORTANT: This must be defined BEFORE /api/transactions/:id to avoid route conflicts
+app.get('/api/transactions/monthly-summary', authenticate, (req, res) => {
+  const { year, month } = req.query;
+
+  // Default to previous month if not specified
+  const now = new Date();
+  const targetYear = year ? parseInt(year) : (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
+  const targetMonth = month ? parseInt(month) : (now.getMonth() === 0 ? 12 : now.getMonth());
+
+  // Calculate start and end dates for the month
+  const startDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`;
+  const lastDay = new Date(targetYear, targetMonth, 0).getDate();
+  const endDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${lastDay}`;
+
+  // Get total expenses for the month
+  const totals = db.prepare(`
+    SELECT 
+      COALESCE(SUM(amount), 0) as total_expense,
+      COUNT(*) as transaction_count
+    FROM transactions
+    WHERE type = 'expense' AND date >= ? AND date <= ?
+  `).get(startDate, endDate);
+
+  // Get breakdown by category
+  const categoryBreakdown = db.prepare(`
+    SELECT 
+      c.name,
+      c.icon,
+      c.color,
+      c.category_group,
+      SUM(t.amount) as total,
+      COUNT(*) as count
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.id
+    WHERE t.type = 'expense' AND t.date >= ? AND t.date <= ?
+    GROUP BY c.id
+    ORDER BY total DESC
+  `).all(startDate, endDate);
+
+  // Get breakdown by group (home vs office)
+  const groupBreakdown = db.prepare(`
+    SELECT 
+      c.category_group as group_name,
+      SUM(t.amount) as total,
+      COUNT(*) as count
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.id
+    WHERE t.type = 'expense' AND t.date >= ? AND t.date <= ?
+    GROUP BY c.category_group
+    ORDER BY c.category_group ASC
+  `).all(startDate, endDate);
+
+  // Get daily spending pattern
+  const dailySpending = db.prepare(`
+    SELECT 
+      date,
+      SUM(amount) as total
+    FROM transactions
+    WHERE type = 'expense' AND date >= ? AND date <= ?
+    GROUP BY date
+    ORDER BY date ASC
+  `).all(startDate, endDate);
+
+  // Get available months (for dropdown)
+  const availableMonths = db.prepare(`
+    SELECT DISTINCT 
+      strftime('%Y', date) as year,
+      strftime('%m', date) as month
+    FROM transactions
+    WHERE type = 'expense'
+    ORDER BY year DESC, month DESC
+    LIMIT 12
+  `).all();
+
+  res.json({
+    year: targetYear,
+    month: targetMonth,
+    monthName: new Date(targetYear, targetMonth - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+    startDate,
+    endDate,
+    totalExpense: totals.total_expense,
+    transactionCount: totals.transaction_count,
+    categoryBreakdown,
+    groupBreakdown,
+    dailySpending,
+    availableMonths
+  });
+});
+
+// Get last N months summary for comparison charts
+// IMPORTANT: This must be defined BEFORE /api/transactions/:id to avoid route conflicts
+app.get('/api/transactions/monthly-comparison', authenticate, (req, res) => {
+  const months = parseInt(req.query.months) || 6;
+
+  const data = db.prepare(`
+    SELECT
+      strftime('%Y-%m', date) as month,
+      c.category_group,
+      SUM(amount) as total
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.id
+    WHERE t.type = 'expense'
+      AND date >= date('now', '-' || ? || ' months')
+    GROUP BY strftime('%Y-%m', date), c.category_group
+    ORDER BY month ASC
+  `).all(months);
+
+  res.json(data);
+});
+
 // Get single transaction (for edit form)
+// IMPORTANT: This wildcard :id route must come AFTER all named routes like monthly-summary
 app.get('/api/transactions/:id', authenticate, (req, res) => {
   const transaction = db.prepare(`
     SELECT t.*, c.name as category_name, c.icon as category_icon, c.category_group
@@ -957,116 +1069,6 @@ app.get('/api/documents/categories', authenticate, (req, res) => {
 // ========================
 // START SERVER
 // ========================
-
-// Health check endpoint (for Uptime Kuma or other monitoring)
-// Monthly summary endpoint - shows summary for a specific month
-app.get('/api/transactions/monthly-summary', authenticate, (req, res) => {
-  const { year, month } = req.query;
-
-  // Default to previous month if not specified
-  const now = new Date();
-  const targetYear = year ? parseInt(year) : (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
-  const targetMonth = month ? parseInt(month) : (now.getMonth() === 0 ? 12 : now.getMonth());
-
-  // Calculate start and end dates for the month
-  const startDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`;
-  const lastDay = new Date(targetYear, targetMonth, 0).getDate();
-  const endDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${lastDay}`;
-
-  // Get total expenses for the month
-  const totals = db.prepare(`
-    SELECT 
-      COALESCE(SUM(amount), 0) as total_expense,
-      COUNT(*) as transaction_count
-    FROM transactions
-    WHERE type = 'expense' AND date >= ? AND date <= ?
-  `).get(startDate, endDate);
-
-  // Get breakdown by category
-  const categoryBreakdown = db.prepare(`
-    SELECT 
-      c.name,
-      c.icon,
-      c.color,
-      c.category_group,
-      SUM(t.amount) as total,
-      COUNT(*) as count
-    FROM transactions t
-    JOIN categories c ON t.category_id = c.id
-    WHERE t.type = 'expense' AND t.date >= ? AND t.date <= ?
-    GROUP BY c.id
-    ORDER BY total DESC
-  `).all(startDate, endDate);
-
-  // Get breakdown by group (home vs office)
-  const groupBreakdown = db.prepare(`
-    SELECT 
-      c.category_group as group_name,
-      SUM(t.amount) as total,
-      COUNT(*) as count
-    FROM transactions t
-    JOIN categories c ON t.category_id = c.id
-    WHERE t.type = 'expense' AND t.date >= ? AND t.date <= ?
-    GROUP BY c.category_group
-    ORDER BY c.category_group ASC
-  `).all(startDate, endDate);
-
-  // Get daily spending pattern
-  const dailySpending = db.prepare(`
-    SELECT 
-      date,
-      SUM(amount) as total
-    FROM transactions
-    WHERE type = 'expense' AND date >= ? AND date <= ?
-    GROUP BY date
-    ORDER BY date ASC
-  `).all(startDate, endDate);
-
-  // Get available months (for dropdown)
-  const availableMonths = db.prepare(`
-    SELECT DISTINCT 
-      strftime('%Y', date) as year,
-      strftime('%m', date) as month
-    FROM transactions
-    WHERE type = 'expense'
-    ORDER BY year DESC, month DESC
-    LIMIT 12
-  `).all();
-
-  res.json({
-    year: targetYear,
-    month: targetMonth,
-    monthName: new Date(targetYear, targetMonth - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
-    startDate,
-    endDate,
-    totalExpense: totals.total_expense,
-    transactionCount: totals.transaction_count,
-    categoryBreakdown,
-    groupBreakdown,
-    dailySpending,
-    availableMonths
-  });
-});
-
-// Get last N months summary for comparison charts
-app.get('/api/transactions/monthly-comparison', authenticate, (req, res) => {
-  const months = parseInt(req.query.months) || 6;
-
-  const data = db.prepare(`
-    SELECT
-      strftime('%Y-%m', date) as month,
-      c.category_group,
-      SUM(amount) as total
-    FROM transactions t
-    JOIN categories c ON t.category_id = c.id
-    WHERE t.type = 'expense'
-      AND date >= date('now', '-' || ? || ' months')
-    GROUP BY strftime('%Y-%m', date), c.category_group
-    ORDER BY month ASC
-  `).all(months);
-
-  res.json(data);
-});
 
 app.get('/api/health', (req, res) => {
   try {

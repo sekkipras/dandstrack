@@ -964,29 +964,34 @@ app.post('/api/documents', authenticate, upload.single('file'), (req, res) => {
   res.json({ id: result.lastInsertRowid, success: true });
 });
 
-// Get documents
+// Get documents (HOUSEHOLD MODE - shows all users' documents)
 app.get('/api/documents', authenticate, (req, res) => {
   const { category } = req.query;
 
-  let query = 'SELECT * FROM documents WHERE user_id = ?';
-  const params = [req.user.id];
+  let query = `
+    SELECT d.*, u.display_name as uploaded_by
+    FROM documents d
+    JOIN users u ON d.user_id = u.id
+    WHERE 1=1
+  `;
+  const params = [];
 
   if (category) {
-    query += ' AND category = ?';
+    query += ' AND d.category = ?';
     params.push(category);
   }
 
-  query += ' ORDER BY uploaded_at DESC';
+  query += ' ORDER BY d.uploaded_at DESC';
 
   const documents = db.prepare(query).all(...params);
   res.json(documents);
 });
 
-// Download document
+// Download document (any household member can download)
 app.get('/api/documents/:id/download', authenticate, (req, res) => {
   const doc = db.prepare(
-    'SELECT * FROM documents WHERE id = ? AND user_id = ?'
-  ).get(req.params.id, req.user.id);
+    'SELECT * FROM documents WHERE id = ?'
+  ).get(req.params.id);
 
   if (!doc) {
     return res.status(404).json({ error: 'Document not found' });
@@ -1001,11 +1006,11 @@ app.get('/api/documents/:id/download', authenticate, (req, res) => {
   res.download(filePath, doc.original_name);
 });
 
-// View document (for images/PDFs)
+// View document (any household member can view)
 app.get('/api/documents/:id/view', authenticate, (req, res) => {
   const doc = db.prepare(
-    'SELECT * FROM documents WHERE id = ? AND user_id = ?'
-  ).get(req.params.id, req.user.id);
+    'SELECT * FROM documents WHERE id = ?'
+  ).get(req.params.id);
 
   if (!doc) {
     return res.status(404).json({ error: 'Document not found' });
@@ -1021,11 +1026,11 @@ app.get('/api/documents/:id/view', authenticate, (req, res) => {
   res.sendFile(path.resolve(filePath));
 });
 
-// Delete document
+// Delete document (any household member can delete)
 app.delete('/api/documents/:id', authenticate, (req, res) => {
   const doc = db.prepare(
-    'SELECT * FROM documents WHERE id = ? AND user_id = ?'
-  ).get(req.params.id, req.user.id);
+    'SELECT * FROM documents WHERE id = ?'
+  ).get(req.params.id);
 
   if (!doc) {
     return res.status(404).json({ error: 'Document not found' });
@@ -1043,15 +1048,14 @@ app.delete('/api/documents/:id', authenticate, (req, res) => {
   res.json({ success: true });
 });
 
-// Get document categories
+// Get document categories (HOUSEHOLD MODE - counts all users' documents)
 app.get('/api/documents/categories', authenticate, (req, res) => {
   const categories = db.prepare(`
     SELECT DISTINCT category, COUNT(*) as count
     FROM documents
-    WHERE user_id = ?
     GROUP BY category
     ORDER BY category
-  `).all(req.user.id);
+  `).all();
 
   // Add default categories
   const defaults = ['ID Documents', 'Licenses', 'Insurance', 'Medical', 'Financial', 'General'];

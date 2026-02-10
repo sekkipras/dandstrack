@@ -706,7 +706,7 @@ function renderDocuments() {
         </div>
         <div class="document-info">
           <div class="document-name">${doc.name}</div>
-          <div class="document-meta">${utils.formatFileSize(doc.file_size)}</div>
+          <div class="document-meta">${utils.formatFileSize(doc.file_size)}${doc.uploaded_by ? ` • by ${doc.uploaded_by}` : ''}</div>
         </div>
         <button class="document-delete" title="Delete">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

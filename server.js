@@ -123,11 +123,15 @@ const newCategories = [
   { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1', group: 'office' },
   { name: 'Office Supplies', type: 'expense', icon: '📎', color: '#8b5cf6', group: 'office' },
   { name: 'Office Travel', type: 'expense', icon: '🚌', color: '#f59e0b', group: 'office' },
-  // v1.4.0 - New categories based on spending analysis
+  // v1.5.0 - New categories based on spending analysis
   { name: 'Jewellery', type: 'expense', icon: '💎', color: '#d946ef', group: 'home' },
   { name: 'Personal Care', type: 'expense', icon: '💆', color: '#f472b6', group: 'home' },
   { name: 'Insurance', type: 'expense', icon: '🛡️', color: '#0891b2', group: 'home' },
   { name: 'Pharmacy', type: 'expense', icon: '💊', color: '#e11d48', group: 'home' },
+  // v1.5.0 - New categories based on July 2026 expense analysis
+  { name: 'Home Services', type: 'expense', icon: '🏠', color: '#a3754e', group: 'home' },
+  { name: 'Gifts', type: 'expense', icon: '🎁', color: '#e879a8', group: 'home' },
+  { name: 'Religious', type: 'expense', icon: '🛕', color: '#f59e0b', group: 'home' },
 ];
 
 for (const cat of newCategories) {
@@ -139,7 +143,7 @@ for (const cat of newCategories) {
   }
 }
 
-// v1.4.0 Migration: Recategorize existing transactions based on merchant names
+// v1.5.0 Migration: Recategorize existing transactions based on merchant names
 // This runs once - moves transactions to more appropriate categories
 try {
   const insuranceCat = db.prepare("SELECT id FROM categories WHERE name = 'Insurance' AND is_default = 1").get();
@@ -190,6 +194,41 @@ try {
       if (result.changes > 0) console.log(`Migration: Moved ${result.changes} transactions to Personal Care (pattern: ${pattern})`);
     }
   }
+
+  // v1.5.0 - Recategorize into new categories
+  const homeServCat = db.prepare("SELECT id FROM categories WHERE name = 'Home Services' AND is_default = 1").get();
+  const giftsCat = db.prepare("SELECT id FROM categories WHERE name = 'Gifts' AND is_default = 1").get();
+  const religiousCat = db.prepare("SELECT id FROM categories WHERE name = 'Religious' AND is_default = 1").get();
+
+  if (homeServCat) {
+    const homeServPatterns = ['%maid%', '%iron shop%', '%ironing%', '%laundry%', '%washing%', '%plumber%', '%electrician%', '%carpenter%'];
+    for (const pattern of homeServPatterns) {
+      const result = db.prepare(
+        "UPDATE transactions SET category_id = ? WHERE LOWER(merchant) LIKE ? AND category_id != ?"
+      ).run(homeServCat.id, pattern, homeServCat.id);
+      if (result.changes > 0) console.log(`Migration: Moved ${result.changes} transactions to Home Services (pattern: ${pattern})`);
+    }
+  }
+
+  if (giftsCat) {
+    const giftsPatterns = ['%gift%'];
+    for (const pattern of giftsPatterns) {
+      const result = db.prepare(
+        "UPDATE transactions SET category_id = ? WHERE LOWER(merchant) LIKE ? AND category_id != ?"
+      ).run(giftsCat.id, pattern, giftsCat.id);
+      if (result.changes > 0) console.log(`Migration: Moved ${result.changes} transactions to Gifts (pattern: ${pattern})`);
+    }
+  }
+
+  if (religiousCat) {
+    const religiousPatterns = ['%temple%', '%pooja%', '%puja%', '%archana%', '%prasad%'];
+    for (const pattern of religiousPatterns) {
+      const result = db.prepare(
+        "UPDATE transactions SET category_id = ? WHERE LOWER(merchant) LIKE ? AND category_id != ?"
+      ).run(religiousCat.id, pattern, religiousCat.id);
+      if (result.changes > 0) console.log(`Migration: Moved ${result.changes} transactions to Religious (pattern: ${pattern})`);
+    }
+  }
 } catch (e) {
   console.log('Migration: Category recategorization skipped or already done -', e.message);
 }
@@ -215,6 +254,10 @@ if (categoryCount.count === 0) {
     { name: 'Education', type: 'expense', icon: '📚', color: '#14b8a6', group: 'home' },
     { name: 'Bills', type: 'expense', icon: '📄', color: '#64748b', group: 'home' },
     { name: 'Other Expense', type: 'expense', icon: '📦', color: '#78716c', group: 'home' },
+    // v1.5.0 categories
+    { name: 'Home Services', type: 'expense', icon: '🏠', color: '#a3754e', group: 'home' },
+    { name: 'Gifts', type: 'expense', icon: '🎁', color: '#e879a8', group: 'home' },
+    { name: 'Religious', type: 'expense', icon: '🛕', color: '#f59e0b', group: 'home' },
     // Office expense categories
     { name: 'Office Expenses', type: 'expense', icon: '💼', color: '#6366f1', group: 'office' },
     { name: 'Office Supplies', type: 'expense', icon: '📎', color: '#8b5cf6', group: 'office' },
@@ -642,6 +685,19 @@ app.get('/api/transactions/summary', authenticate, (req, res) => {
     ORDER BY total DESC
   `).all(defaultStart, defaultEnd);
 
+  // Per-user breakdown
+  const userBreakdown = db.prepare(`
+    SELECT 
+      u.display_name,
+      SUM(t.amount) as total,
+      COUNT(*) as count
+    FROM transactions t
+    JOIN users u ON t.user_id = u.id
+    WHERE t.type = 'expense' AND t.date >= ? AND t.date <= ?
+    GROUP BY t.user_id
+    ORDER BY total DESC
+  `).all(defaultStart, defaultEnd);
+
   const income = summary.find(s => s.type === 'income')?.total || 0;
   const expense = summary.find(s => s.type === 'expense')?.total || 0;
 
@@ -650,7 +706,8 @@ app.get('/api/transactions/summary', authenticate, (req, res) => {
     balance: income - expense,
     startDate: defaultStart,
     endDate: defaultEnd,
-    categoryBreakdown
+    categoryBreakdown,
+    userBreakdown
   });
 });
 
@@ -1080,7 +1137,7 @@ app.get('/api/health', (req, res) => {
     db.prepare('SELECT 1').get();
     res.json({
       status: 'healthy',
-      version: '1.4.0',
+      version: '1.5.0',
       timestamp: new Date().toISOString()
     });
   } catch (err) {
@@ -1102,7 +1159,7 @@ app.use('/api/*', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
-║         D&S Expense Tracker v1.4.0 - Server Started          ║
+║         D&S Expense Tracker v1.5.0 - Server Started          ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 🚀 Server running on port ${PORT}

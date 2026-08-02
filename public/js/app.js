@@ -1217,11 +1217,57 @@ async function loadStats() {
     renderBreakdown(homeCategories, 'home-breakdown', homeTotal);
     renderBreakdown(officeCategories, 'office-breakdown', officeTotal);
 
+    // Render per-person breakdown
+    renderPersonBreakdown(summary.userBreakdown || [], summary.expense);
+
     // Load payment summary
     await loadPaymentSummary();
 
     // Load charts
     await loadCharts();
+}
+
+function renderPersonBreakdown(users, totalExpense) {
+    const container = document.getElementById('person-breakdown');
+    if (!container) return;
+
+    if (!users || users.length === 0) {
+        container.innerHTML = `
+      <div class="empty-state" style="padding: 1rem;">
+        <p>No data for this period</p>
+      </div>
+    `;
+        return;
+    }
+
+    // Use distinct colors for each person
+    const colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b'];
+
+    container.innerHTML = users.map((user, i) => {
+        const percentage = totalExpense > 0 ? (user.total / totalExpense) * 100 : 0;
+        const color = colors[i % colors.length];
+        // Get first name for display
+        const firstName = user.display_name.split(' ')[0];
+
+        return `
+      <div class="person-item">
+        <div class="person-avatar" style="background: ${color}20; color: ${color}">
+          ${firstName.charAt(0).toUpperCase()}
+        </div>
+        <div class="person-details">
+          <div class="person-name">${firstName}</div>
+          <div class="person-stats">${user.count} transactions</div>
+          <div class="breakdown-bar">
+            <div class="breakdown-bar-fill" style="width: ${percentage}%; background: ${color}"></div>
+          </div>
+        </div>
+        <div class="person-amount">
+          <span class="person-total">${utils.formatCurrency(user.total)}</span>
+          <span class="person-percent">${percentage.toFixed(0)}%</span>
+        </div>
+      </div>
+    `;
+    }).join('');
 }
 
 async function loadPaymentSummary() {

@@ -1813,6 +1813,83 @@ body::before {
   }
 }
 
+/* ========================================
+   Per-Person Breakdown
+======================================== */
+.person-breakdown {
+  margin: var(--space-lg);
+  padding: var(--space-lg);
+  border-radius: var(--radius-xl);
+}
+
+.person-breakdown h3 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin-bottom: var(--space-md);
+}
+
+.person-breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.person-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+}
+
+.person-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.person-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.person-name {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  margin-bottom: 2px;
+}
+
+.person-stats {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.person-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.person-total {
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.person-percent {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
 /* iPhone X+ Safe Area */
 @supports (padding: max(0px)) {
   .bottom-nav {
